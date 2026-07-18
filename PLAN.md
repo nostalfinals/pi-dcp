@@ -479,7 +479,22 @@ Exit criteria:
 - State survives `/reload` and `/resume` in a real Pi smoke test.
 - Tree navigation restores branch-correct state.
 
-### Phase 2 — Message mapping and safe range normalization
+### Phase 2 — Message mapping and safe range normalization ✅
+
+**Status:** Completed on 2026-07-18.
+
+Implemented:
+
+- Exact alignment of outbound messages with Pi's active, native-compaction-aware session entries.
+- Deterministic request-local aliases backed by stable Pi entry IDs.
+- Non-mutating, provider-safe annotations for user, assistant, tool-result, image, custom, branch-summary, compaction-summary, and bash-execution messages.
+- Idempotent annotation stripping/reapplication across repeated context passes.
+- Fail-open behavior for message count, ordering, or structural mismatches.
+- Safe closed-range resolution with stale/missing/reversed alias diagnostics.
+- Atomic normalization of sequential and parallel assistant tool-call/result batches.
+- Rejection of orphaned, incomplete, duplicate, or interleaved tool protocols.
+- Provider-neutral raw token estimates that exclude DCP annotation overhead.
+- Unit and real Pi `SessionManager` compaction-context fixtures.
 
 Deliverables:
 
