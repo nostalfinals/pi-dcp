@@ -592,7 +592,23 @@ Exit criteria:
 
 - Every listed active block is effective and restorable.
 
-### Phase 5 — Nudge system
+### Phase 5 — Nudge system ✅
+
+**Status:** Completed on 2026-07-18.
+
+Implemented:
+
+- Effective outbound token estimation after active compression overlays.
+- Numeric and per-model percentage threshold resolution on every mapped context build.
+- Below-minimum silence, throttled soft reminders, and repeatable per-request strong reminders.
+- Branch-resettable iteration tracking keyed by unique session leaf, with reminders after fifteen model/tool continuations.
+- One combined nudge when context pressure and iteration pressure coincide.
+- Deterministic provider-compatible ephemeral messages with no session persistence.
+- Idempotent per-request decisions, exact no-nudge array preservation, and append-stable aliases beyond `m999` for prompt-cache stability.
+- Explicit guidance for semantic batching, preserved technical details, and recent/in-flight work protection.
+- Fail-open behavior that avoids nudge injection when mapping or overlay protocol validation fails.
+- Tests across threshold bands, model windows, long tool loops, repeated passes, and session immutability.
+- Live `deepseek/deepseek-v4-flash` Pi smoke test: the model autonomously called `compress`, created `b1`, consumed its synthetic summary on the next turn, and left the original JSONL source intact.
 
 Deliverables:
 

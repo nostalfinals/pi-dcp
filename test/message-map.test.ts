@@ -120,6 +120,24 @@ describe("message mapping", () => {
 		assert.deepEqual(mapped.value.mappedMessages.map((item) => item.entryId), [compactionId, keptId]);
 	});
 
+	it("keeps existing aliases stable when message count grows past 999", () => {
+		entryNumber = 0;
+		const entries = Array.from({ length: 999 }, (_, index) => userEntry(`message ${index + 1}`));
+		const before = buildMessageMap(entries, messagesFor(entries));
+		assert.equal(before.ok, true);
+		if (!before.ok) return;
+		assert.equal(before.value.mappedMessages[0].alias, "m001");
+		assert.equal(before.value.mappedMessages[998].alias, "m999");
+
+		entries.push(userEntry("message 1000"));
+		const after = buildMessageMap(entries, messagesFor(entries));
+		assert.equal(after.ok, true);
+		if (!after.ok) return;
+		assert.equal(after.value.mappedMessages[0].alias, "m001");
+		assert.equal(after.value.mappedMessages[998].alias, "m999");
+		assert.equal(after.value.mappedMessages[999].alias, "m1000");
+	});
+
 	it("is idempotent across repeated context passes", () => {
 		entryNumber = 0;
 		const entries = [userEntry("one"), userEntry("two")];

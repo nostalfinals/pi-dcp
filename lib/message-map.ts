@@ -197,10 +197,11 @@ export function buildMessageMap(
 		}
 	}
 
-	const width = Math.max(3, String(Math.max(1, projected.length)).length);
-	const annotated = stripped.map((message, index) => annotateMessage(message, `m${String(index + 1).padStart(width, "0")}`));
+	// A fixed minimum width keeps every existing alias stable when the context grows past m999.
+	const aliasFor = (index: number) => `m${String(index + 1).padStart(3, "0")}`;
+	const annotated = stripped.map((message, index) => annotateMessage(message, aliasFor(index)));
 	const mappedMessages: MappedMessage[] = projected.map((item, messageIndex) => {
-		const alias = `m${String(messageIndex + 1).padStart(width, "0")}`;
+		const alias = aliasFor(messageIndex);
 		return {
 			alias,
 			entryId: item.entry.id,
