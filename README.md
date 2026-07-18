@@ -174,7 +174,7 @@ DCP stores complete `pi-dcp-state` snapshots as Pi custom entries on the active 
 
 ## Prompt-cache and context trade-offs
 
-Every visible message receives a small deterministic DCP marker. Existing aliases stay stable as append-only context grows, so normal requests add only a suffix.
+DCP assigns every context message a deterministic request-local alias and injects a compact marker into the request overlay. Assistant markers are placed after signed thinking and before assistant text/tool calls. A system instruction marks them as read-only metadata, and finalized model output is sanitized before persistence if the model imitates a marker. Pi may still briefly render request-overlay or partially streamed markers in runtime views; this trial behavior is intentionally being evaluated. Existing aliases stay stable as append-only context grows, so normal requests add only a suffix.
 
 Creating, superseding, or decompressing a block changes the prompt at that range's anchor and therefore loses cache from that point for the first changed request. Pi native compaction also changes the conversation prefix. Later requests can cache the new stable prefix.
 

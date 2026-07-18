@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { SessionManager, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createCompressTool } from "../lib/compress-tool.js";
+import { createCompressTool, formatTokenEstimate } from "../lib/compress-tool.js";
 import { applyCompressionOverlay } from "../lib/compression.js";
 import { buildMessageMap } from "../lib/message-map.js";
 import { createStateStore } from "../lib/persistence.js";
@@ -32,6 +32,14 @@ function setup() {
 }
 
 describe("compress tool", () => {
+	it("formats estimated token savings compactly", () => {
+		assert.equal(formatTokenEstimate(0), "0");
+		assert.equal(formatTokenEstimate(999), "999");
+		assert.equal(formatTokenEstimate(1_000), "1.0k");
+		assert.equal(formatTokenEstimate(1_100), "1.1k");
+		assert.equal(formatTokenEstimate(148_385), "148.4k");
+	});
+
 	it("executes sequentially against the exact request snapshot", async () => {
 		const { manager, store, snapshot } = setup();
 		const tool = createCompressTool(store, () => snapshot);

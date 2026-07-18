@@ -81,8 +81,11 @@ describe("message mapping", () => {
 		if (assistant.role === "assistant") {
 			assert.equal(assistant.content[0].type, "thinking", "signed thinking must remain first");
 			assert.deepEqual(assistant.content[1], { type: "text", text: '<dcp-message id="m002" />\n' });
+			assert.deepEqual(assistant.content[2], { type: "text", text: "answer" });
+			assert.deepEqual(stripMessageAnnotation(assistant), outbound[1]);
 		}
 		assert.match(JSON.stringify(result.value.messages[2]), /dcp-message id=\\"m003/);
+		assert.doesNotMatch(JSON.stringify(result.value.messages[2]), /previous-assistant-id/);
 		assert.match(JSON.stringify(result.value.messages[3]), /dcp-message id=\\"m004/);
 		assert.match(JSON.stringify(result.value.messages[4]), /dcp-message id=\\"m005/);
 	});
@@ -103,6 +106,73 @@ describe("message mapping", () => {
 			assert.deepEqual(message.content[0], { type: "text", text: '<dcp-message id="m001" />\n' });
 			assert.deepEqual(message.content[1], image);
 		}
+	});
+
+	it("annotates tool-calling assistant messages before the first tool call", () => {
+		entryNumber = 0;
+		const entries = [entry({
+			type: "message",
+			message: {
+				role: "assistant",
+				content: [{ type: "toolCall", id: "call-1", name: "read", arguments: { path: "file" } }],
+				api: "test",
+				provider: "test",
+				model: "test",
+				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+				stopReason: "toolUse",
+				timestamp: 1,
+			},
+		})];
+		const mapped = buildMessageMap(entries, messagesFor(entries));
+		assert.equal(mapped.ok, true);
+		if (!mapped.ok) return;
+		const message = mapped.value.messages[0];
+		assert.equal(message.role, "assistant");
+		if (message.role === "assistant") {
+			assert.deepEqual(message.content[0], { type: "text", text: '<dcp-message id="m001" />\n' });
+			assert.equal(message.content[1]?.type, "toolCall");
+		}
+	});
+
+	it("maps legacy assistant marker pollution and reapplies the current alias", () => {
+		entryNumber = 0;
+		const entries = [entry({
+			type: "message",
+			message: {
+				role: "assistant",
+				content: [
+					{ type: "text", text: '<dcp-message id="m777" />\n' },
+					{ type: "toolCall", id: "call-1", name: "read", arguments: { path: "file" } },
+				],
+				api: "test",
+				provider: "test",
+				model: "test",
+				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+				stopReason: "toolUse",
+				timestamp: 1,
+			},
+		})];
+		const mapped = buildMessageMap(entries, messagesFor(entries));
+		assert.equal(mapped.ok, true);
+		if (!mapped.ok) return;
+		assert.match(JSON.stringify(mapped.value.messages[0]), /dcp-message id=\\"m001/);
+		assert.doesNotMatch(JSON.stringify(mapped.value.messages[0]), /m777/);
+	});
+
+	it("strips inline model-emitted assistant markers", () => {
+		const raw = {
+			role: "assistant",
+			content: [{ type: "text", text: 'before <dcp-message id="m123" /> after' }],
+			api: "test",
+			provider: "test",
+			model: "test",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+			stopReason: "stop",
+			timestamp: 1,
+		} as AgentMessage;
+		const stripped = stripMessageAnnotation(raw);
+		assert.equal(stripped.role, "assistant");
+		if (stripped.role === "assistant") assert.deepEqual(stripped.content, [{ type: "text", text: "before  after" }]);
 	});
 
 	it("aligns Pi's native compaction-aware SessionManager context", () => {

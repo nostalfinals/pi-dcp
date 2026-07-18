@@ -18,3 +18,9 @@ Initial experimental local/Git trial release.
 - Soft, strong, and long-iteration model nudges.
 - Pi native-compaction reconciliation and ghost-block cleanup.
 - Unit, provider-shape, and real Pi `SessionManager` integration coverage.
+
+### Fixed
+
+- Compact one-decimal `k` formatting for compression savings at 1,000 tokens and above.
+- Model-emitted DCP markers are removed from finalized assistant output before persistence; direct assistant request-overlay markers are restored for a runtime behavior trial and constrained by system guidance.
+- Strong-reminder false positives caused by serializing provider metadata instead of using Pi context usage.

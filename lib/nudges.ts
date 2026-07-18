@@ -1,3 +1,4 @@
+import { estimateTokens } from "@earendil-works/pi-coding-agent";
 import { resolveConfig } from "./config.js";
 import type { AgentMessage } from "./message-map.js";
 import type { DcpConfig } from "./types.js";
@@ -81,18 +82,19 @@ export function injectNudge(
 }
 
 export function estimateOutboundTokens(messages: readonly AgentMessage[]): number {
-	let characters = 0;
-	for (const message of messages) {
-		try {
-			characters += JSON.stringify(message, (key, value: unknown) => {
-				if (key === "timestamp" || key === "usage" || key === "cost") return undefined;
-				return value;
-			})?.length ?? 0;
-		} catch {
-			characters += 4;
-		}
+	return messages.reduce((total, message) => total + estimateTokens(message), 0);
+}
+
+/** Use Pi's provider-aware usage when available; estimate only as a fallback. */
+export function estimateEffectiveContextTokens(
+	_overlaySourceMessages: readonly AgentMessage[],
+	overlayMessages: readonly AgentMessage[],
+	piUsageTokens?: number,
+): number {
+	if (piUsageTokens !== undefined && Number.isFinite(piUsageTokens) && piUsageTokens >= 0) {
+		return Math.round(piUsageTokens);
 	}
-	return Math.max(0, Math.ceil(characters / 4) + messages.length * 4);
+	return estimateOutboundTokens(overlayMessages);
 }
 
 export function createNudgeController(): NudgeController {

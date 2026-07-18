@@ -28,11 +28,15 @@ export type MessageMapResult =
 	| { ok: true; value: MessageMap }
 	| { ok: false; messages: AgentMessage[]; reason: string };
 
-const ANNOTATION_PATTERN = /^<dcp-message id="m\d+" \/>\n?/;
-const ASSISTANT_ANNOTATION_PATTERN = /^\n?<dcp-message id="m\d+" \/>$/;
+const ANNOTATION_PATTERN = /^<dcp-message id="m\d+"(?: previous-assistant-id="m\d+")? \/>\n?/;
+const ASSISTANT_ANNOTATION_PATTERN = /(?:\n?<dcp-message id="m\d+"(?: previous-assistant-id="m\d+")? \/>\n?|\s*<!-- dcp-message id="m\d+" -->\s*)/g;
 
 function marker(alias: string): string {
 	return `<dcp-message id="${alias}" />`;
+}
+
+function stripAssistantAnnotationText(text: string): string {
+	return text.replace(ASSISTANT_ANNOTATION_PATTERN, "");
 }
 
 function cloneMessage(message: AgentMessage): AgentMessage {
@@ -67,14 +71,16 @@ export function stripMessageAnnotation(message: AgentMessage): AgentMessage {
 	const copy = cloneMessage(message) as AgentMessage & Record<string, unknown>;
 
 	if (copy.role === "assistant" && Array.isArray(copy.content)) {
-		copy.content = copy.content.filter((block) => {
-			return !(
-				typeof block === "object" &&
-				block !== null &&
-				(block as { type?: unknown }).type === "text" &&
-				typeof (block as { text?: unknown }).text === "string" &&
-				ASSISTANT_ANNOTATION_PATTERN.test((block as { text: string }).text)
-			);
+		copy.content = copy.content.flatMap((block) => {
+			if (
+				typeof block !== "object" ||
+				block === null ||
+				(block as { type?: unknown }).type !== "text" ||
+				typeof (block as { text?: unknown }).text !== "string"
+			) return [block];
+
+			const text = stripAssistantAnnotationText((block as { text: string }).text);
+			return text.length === 0 ? [] : [{ ...block, text }];
 		});
 		return copy;
 	}
@@ -186,9 +192,10 @@ export function buildMessageMap(
 		producingEntryIds.add(item.entry.id);
 	}
 
+	const strippedProjected = projected.map((item) => stripMessageAnnotation(item.message));
 	const stripped = outboundMessages.map(stripMessageAnnotation);
 	for (let index = 0; index < projected.length; index += 1) {
-		if (!isDeepStrictEqual(projected[index].message, stripped[index])) {
+		if (!isDeepStrictEqual(strippedProjected[index], stripped[index])) {
 			return {
 				ok: false,
 				messages: outboundMessages as AgentMessage[],

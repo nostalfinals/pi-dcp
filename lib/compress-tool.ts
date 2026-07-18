@@ -18,6 +18,11 @@ export interface CompressToolDetails {
 	errors?: string[];
 }
 
+export function formatTokenEstimate(tokens: number): string {
+	const rounded = Math.max(0, Math.round(tokens));
+	return rounded < 1_000 ? String(rounded) : `${(rounded / 1_000).toFixed(1)}k`;
+}
+
 const parameters = Type.Object({
 	ranges: Type.Array(Type.Object({
 		startId: Type.String({ description: "First DCP message alias in the closed range, for example m012" }),
@@ -87,7 +92,7 @@ export function createCompressTool(
 					text: [
 						`Compressed ${blockIds.length} range${blockIds.length === 1 ? "" : "s"} into ${blockIds.join(", ")}.`,
 						superseded.length > 0 ? ` Superseded ${superseded.join(", ")}.` : "",
-						` Estimated reduction: ~${prepared.value.estimatedTokensSaved} tokens.`,
+						` Estimated reduction: ~${formatTokenEstimate(prepared.value.estimatedTokensSaved)} tokens.`,
 					].join(""),
 				}],
 				details: {

@@ -1,11 +1,12 @@
+import { isDeepStrictEqual } from "node:util";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerDcpCommand } from "./lib/commands.js";
 import { reconcileStateStore } from "./lib/compaction-sync.js";
 import { createCompressTool, type CompressionRequestSnapshot } from "./lib/compress-tool.js";
 import { applyCompressionOverlay } from "./lib/compression.js";
 import { DEFAULT_CONFIG, loadConfig } from "./lib/config.js";
-import { buildMessageMap } from "./lib/message-map.js";
-import { createNudgeController, estimateOutboundTokens, injectNudge } from "./lib/nudges.js";
+import { buildMessageMap, stripMessageAnnotation } from "./lib/message-map.js";
+import { createNudgeController, estimateEffectiveContextTokens, injectNudge } from "./lib/nudges.js";
 import { createStateStore } from "./lib/persistence.js";
 import type { DcpConfig } from "./lib/types.js";
 
@@ -50,6 +51,17 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 	pi.registerTool(createCompressTool(state, () => latestSnapshot));
 	registerDcpCommand(pi, state);
 
+	pi.on("before_agent_start", async (event) => ({
+		systemPrompt: [
+			event.systemPrompt,
+			"DCP message markers are read-only metadata. When calling the `compress` tool, reference only their IDs; never output, quote, or reproduce the markers.",
+		].join("\n\n"),
+	}));
+	pi.on("message_end", async (event) => {
+		if (event.message.role !== "assistant" || !Array.isArray(event.message.content)) return;
+		const sanitized = stripMessageAnnotation(event.message);
+		if (!isDeepStrictEqual(sanitized, event.message)) return { message: sanitized };
+	});
 	pi.on("session_start", async (_event, ctx) => restore(ctx, true));
 	pi.on("session_tree", async (_event, ctx) => restore(ctx, false));
 	pi.on("session_compact", async (_event, ctx) => {
@@ -77,14 +89,19 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 		}
 
 		const latestUser = [...mapped.value.mappedMessages].reverse().find((item) => item.message.role === "user");
+		const contextUsage = ctx.getContextUsage();
 		const modelContextWindow = ctx.model?.contextWindow;
 		const contextWindow = modelContextWindow && modelContextWindow > 0
 			? modelContextWindow
-			: ctx.getContextUsage()?.contextWindow;
+			: contextUsage?.contextWindow;
 		const evaluated = nudges.evaluate({
 			config,
 			contextWindow,
-			estimatedTokens: estimateOutboundTokens(overlay.messages),
+			estimatedTokens: estimateEffectiveContextTokens(
+				mapped.value.messages,
+				overlay.messages,
+				contextUsage?.tokens ?? undefined,
+			),
 			sessionId: ctx.sessionManager.getSessionId(),
 			requestLeafId: ctx.sessionManager.getLeafId(),
 			latestUserEntryId: latestUser?.entryId,

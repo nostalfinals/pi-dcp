@@ -170,11 +170,13 @@ m001 -> 7f3c9a12
 m002 -> 0ab32d81
 ```
 
-The model receives compact, idempotent annotations such as:
+Messages receive compact, idempotent annotations such as:
 
 ```text
-<dcp-message id="m017">...</dcp-message>
+<dcp-message id="m017" />
 ```
+
+Assistant annotations are inserted after signed thinking and before text/tool calls. DCP adds a system-prompt constraint that treats markers as read-only metadata and sanitizes marker imitation from finalized assistant output before persistence. Pi may still briefly render request-overlay or partially streamed markers; the direct-assistant-marker behavior is retained as an explicit trial.
 
 The compression tool resolves aliases against the exact snapshot from which the tool call was generated, then persists only the underlying stable Pi entry IDs.
 
@@ -488,7 +490,9 @@ Implemented:
 - Exact alignment of outbound messages with Pi's active, native-compaction-aware session entries.
 - Deterministic request-local aliases backed by stable Pi entry IDs.
 - Non-mutating, provider-safe annotations for user, assistant, tool-result, image, custom, branch-summary, compaction-summary, and bash-execution messages.
-- Idempotent annotation stripping/reapplication across repeated context passes.
+- Assistant annotations preserve signed-thinking placement and precede text/tool calls.
+- System-prompt guidance plus finalized-output sanitization prevents newly imitated markers from persisting.
+- Idempotent annotation stripping/reapplication across repeated context passes, including legacy leaked assistant markers.
 - Fail-open behavior for message count, ordering, or structural mismatches.
 - Safe closed-range resolution with stale/missing/reversed alias diagnostics.
 - Atomic normalization of sequential and parallel assistant tool-call/result batches.
@@ -507,6 +511,7 @@ Deliverables:
 Tests:
 
 - User, assistant, image, thinking, custom, branch-summary, and compaction entries.
+- Assistant marker placement, system-prompt guidance, and finalized-output sanitization.
 - Sequential and parallel tool calls.
 - No orphan tool call/results after normalized removal.
 - Repeated context passes do not duplicate annotations.

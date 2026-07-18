@@ -4,6 +4,7 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "../lib/message-map.js";
 import {
 	createNudgeController,
+	estimateEffectiveContextTokens,
 	estimateOutboundTokens,
 	injectNudge,
 	type NudgeEvaluationInput,
@@ -112,5 +113,23 @@ describe("DCP nudge policy", () => {
 		const short = [{ role: "user", content: "x", timestamp: 1 } as AgentMessage];
 		const long = [{ role: "user", content: "x".repeat(4_000), timestamp: 1 } as AgentMessage];
 		assert.ok(estimateOutboundTokens(long) > estimateOutboundTokens(short) + 900);
+	});
+
+	it("uses Pi context usage instead of re-estimating provider metadata", () => {
+		const raw = [{ role: "user", content: "x".repeat(4_000), timestamp: 1 } as AgentMessage];
+		const overlay = [{ role: "user", content: "summary", timestamp: 1 } as AgentMessage];
+
+		assert.equal(estimateEffectiveContextTokens(raw, raw, 310), 310);
+		assert.equal(estimateEffectiveContextTokens(raw, overlay, 2_000), 2_000);
+		assert.equal(estimateEffectiveContextTokens(raw, overlay), estimateOutboundTokens(overlay));
+	});
+
+	it("ignores invalid Pi usage and falls back to the overlay estimate", () => {
+		const raw = [{ role: "user", content: "short", timestamp: 1 } as AgentMessage];
+		const overlay = [{ role: "user", content: "x".repeat(4_000), timestamp: 1 } as AgentMessage];
+		assert.equal(
+			estimateEffectiveContextTokens(raw, overlay, Number.NaN),
+			estimateOutboundTokens(overlay),
+		);
 	});
 });
