@@ -33,6 +33,16 @@ describe("configuration", () => {
 		}
 	});
 
+	it("accepts the marker debug switch and rejects invalid values", () => {
+		assert.deepEqual(parseConfigLayer({ debugMarkerTrace: true }), {
+			config: { debugMarkerTrace: true },
+			errors: [],
+		});
+		assert.deepEqual(parseConfigLayer({ debugMarkerTrace: "yes" }).errors, [
+			"debugMarkerTrace must be a boolean",
+		]);
+	});
+
 	it("rejects unknown public settings", () => {
 		const parsed = parseConfigLayer({ minCompressContext: 10, deduplication: true });
 		assert.equal(parsed.config, undefined);
@@ -56,7 +66,11 @@ describe("configuration", () => {
 		writeFileSync(join(project, ".pi", "dcp.json"), JSON.stringify({ maxCompressContext: "60%" }));
 
 		const loaded = loadConfig(project, agent);
-		assert.deepEqual(loaded.config, { minCompressContext: "20%", maxCompressContext: "60%" });
+		assert.deepEqual(loaded.config, {
+			minCompressContext: "20%",
+			maxCompressContext: "60%",
+			debugMarkerTrace: false,
+		});
 		assert.deepEqual(loaded.warnings, []);
 	});
 
@@ -84,14 +98,14 @@ describe("configuration", () => {
 	});
 
 	it("resolves percentages against the model context window", () => {
-		assert.deepEqual(resolveConfig({ minCompressContext: "25%", maxCompressContext: "80%" }, 200_000), {
+		assert.deepEqual(resolveConfig({ minCompressContext: "25%", maxCompressContext: "80%", debugMarkerTrace: false }, 200_000), {
 			config: { minCompressContext: 50_000, maxCompressContext: 160_000 },
 		});
-		assert.match(resolveConfig({ minCompressContext: "25%", maxCompressContext: 100_000 }).error ?? "", /context window/);
+		assert.match(resolveConfig({ minCompressContext: "25%", maxCompressContext: 100_000, debugMarkerTrace: false }).error ?? "", /context window/);
 	});
 
 	it("validates mixed limits after resolution", () => {
-		const result = resolveConfig({ minCompressContext: "80%", maxCompressContext: 50_000 }, 100_000);
+		const result = resolveConfig({ minCompressContext: "80%", maxCompressContext: 50_000, debugMarkerTrace: false }, 100_000);
 		assert.equal(result.config, undefined);
 		assert.match(result.error ?? "", /must be lower/);
 	});

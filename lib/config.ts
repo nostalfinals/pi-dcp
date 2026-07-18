@@ -6,6 +6,7 @@ import type { ContextLimit, DcpConfig, ResolvedDcpConfig } from "./types.js";
 export const DEFAULT_CONFIG: Readonly<DcpConfig> = Object.freeze({
 	minCompressContext: 50_000,
 	maxCompressContext: 100_000,
+	debugMarkerTrace: false,
 });
 
 export interface LoadedConfig {
@@ -22,7 +23,8 @@ export interface ResolvedConfigResult {
 	error?: string;
 }
 
-const CONFIG_KEYS = new Set<keyof DcpConfig>(["minCompressContext", "maxCompressContext"]);
+const CONTEXT_LIMIT_CONFIG_KEYS = ["minCompressContext", "maxCompressContext"] as const;
+const CONFIG_KEYS = new Set<keyof DcpConfig>([...CONTEXT_LIMIT_CONFIG_KEYS, "debugMarkerTrace"]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -62,13 +64,20 @@ export function parseConfigLayer(value: unknown): { config?: Partial<DcpConfig>;
 		if (!CONFIG_KEYS.has(key as keyof DcpConfig)) errors.push(`unknown setting: ${key}`);
 	}
 
-	for (const key of CONFIG_KEYS) {
+	for (const key of CONTEXT_LIMIT_CONFIG_KEYS) {
 		if (!(key in value)) continue;
 		const parsed = parseContextLimit(value[key]);
 		if (parsed === undefined) {
 			errors.push(`${key} must be a positive integer token count or a percentage in (0%, 100%]`);
 		} else {
 			config[key] = parsed;
+		}
+	}
+	if ("debugMarkerTrace" in value) {
+		if (typeof value.debugMarkerTrace !== "boolean") {
+			errors.push("debugMarkerTrace must be a boolean");
+		} else {
+			config.debugMarkerTrace = value.debugMarkerTrace;
 		}
 	}
 

@@ -80,7 +80,7 @@ This trial is intentionally not published to npm because the unscoped `pi-dcp` p
 
 ## Configuration
 
-Only two public settings are supported. Put them in either:
+Three public settings are supported. Put them in either:
 
 - Global: `~/.pi/agent/dcp.json`
 - Project: `<project>/.pi/dcp.json`
@@ -92,7 +92,8 @@ Token-count example:
 ```json
 {
   "minCompressContext": 50000,
-  "maxCompressContext": 100000
+  "maxCompressContext": 100000,
+  "debugMarkerTrace": false
 }
 ```
 
@@ -106,6 +107,14 @@ Percentage example:
 ```
 
 Percentages are resolved against the active model's context window. The minimum must resolve below the maximum. Defaults are 50,000 and 100,000 tokens.
+
+`debugMarkerTrace` defaults to `false`. When enabled, DCP writes grep-friendly JSON records to stderr for outbound context markers, streaming assistant marker events, and finalized-message sanitization. Records contain marker counts and short marker-adjacent excerpts, never complete conversation messages. Redirect stderr when reproducing a marker leak:
+
+```bash
+pi 2>/tmp/pi-dcp-marker-debug.log
+```
+
+A `message_update` or `message_end.before-sanitize` record proves that a marker entered model-generated assistant output. If only `context.outbound` records appear while the UI flashes a marker, the request overlay/TUI path is the likely source.
 
 Threshold behavior:
 

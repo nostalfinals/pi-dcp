@@ -6,6 +6,7 @@ import { createCompressTool, type CompressionRequestSnapshot } from "./lib/compr
 import { applyCompressionOverlay } from "./lib/compression.js";
 import { DEFAULT_CONFIG, loadConfig } from "./lib/config.js";
 import { buildMessageMap, stripMessageAnnotation } from "./lib/message-map.js";
+import { emitMarkerDebug } from "./lib/marker-debug.js";
 import { createNudgeController, estimateEffectiveContextTokens, injectNudge } from "./lib/nudges.js";
 import { createStateStore } from "./lib/persistence.js";
 import type { DcpConfig } from "./lib/types.js";
@@ -23,6 +24,10 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 		if (emittedWarnings.has(warning)) return;
 		emittedWarnings.add(warning);
 		console.warn(warning);
+	}
+
+	function traceMarker(stage: string, value: unknown, force = false, includeExcerpts = true): void {
+		emitMarkerDebug(config.debugMarkerTrace, stage, value, { force, includeExcerpts });
 	}
 
 	function reconcile(ctx: ExtensionContext): void {
@@ -57,10 +62,18 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 			"DCP message markers are read-only metadata. When calling the `compress` tool, reference only their IDs; never output, quote, or reproduce the markers.",
 		].join("\n\n"),
 	}));
+	pi.on("message_update", async (event) => {
+		traceMarker("message_update.message", event.message);
+		traceMarker("message_update.assistantMessageEvent", event.assistantMessageEvent);
+	});
 	pi.on("message_end", async (event) => {
+		traceMarker("message_end.before-sanitize", event.message);
 		if (event.message.role !== "assistant" || !Array.isArray(event.message.content)) return;
 		const sanitized = stripMessageAnnotation(event.message);
-		if (!isDeepStrictEqual(sanitized, event.message)) return { message: sanitized };
+		if (!isDeepStrictEqual(sanitized, event.message)) {
+			traceMarker("message_end.after-sanitize", sanitized, true);
+			return { message: sanitized };
+		}
 	});
 	pi.on("session_start", async (_event, ctx) => restore(ctx, true));
 	pi.on("session_tree", async (_event, ctx) => restore(ctx, false));
@@ -74,6 +87,7 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 		if (!mapped.ok) {
 			latestSnapshot = undefined;
 			warnOnce([`message mapping disabled for this request: ${mapped.reason}`]);
+			traceMarker("context.outbound.mapping-failed", event.messages, true, false);
 			return { messages: event.messages };
 		}
 
@@ -85,6 +99,7 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 		const overlay = applyCompressionOverlay(mapped.value, state.get());
 		if (!overlay.ok) {
 			warnOnce([`compression overlay disabled for this request: ${overlay.errors.join("; ")}`]);
+			traceMarker("context.outbound.overlay-failed", overlay.messages, true, false);
 			return { messages: overlay.messages };
 		}
 
@@ -107,7 +122,9 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 			latestUserEntryId: latestUser?.entryId,
 		});
 		if (evaluated.configError) warnOnce([`compression nudges disabled: ${evaluated.configError}`]);
-		return { messages: injectNudge(overlay.messages, evaluated.decision) };
+		const outbound = injectNudge(overlay.messages, evaluated.decision);
+		traceMarker("context.outbound", outbound, true, false);
+		return { messages: outbound };
 	});
 
 }

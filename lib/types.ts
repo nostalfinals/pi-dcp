@@ -3,6 +3,7 @@ export type ContextLimit = number | `${number}%`;
 export interface DcpConfig {
 	minCompressContext: ContextLimit;
 	maxCompressContext: ContextLimit;
+	debugMarkerTrace: boolean;
 }
 
 export interface ResolvedDcpConfig {

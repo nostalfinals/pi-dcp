@@ -11,7 +11,7 @@ import {
 } from "../lib/nudges.js";
 import type { DcpConfig } from "../lib/types.js";
 
-const numericConfig: DcpConfig = { minCompressContext: 100, maxCompressContext: 200 };
+const numericConfig: DcpConfig = { minCompressContext: 100, maxCompressContext: 200, debugMarkerTrace: false };
 
 function input(
 	leaf: string,
@@ -60,7 +60,7 @@ describe("DCP nudge policy", () => {
 	});
 
 	it("resolves percentage thresholds independently for each model window", () => {
-		const percentage: DcpConfig = { minCompressContext: "25%", maxCompressContext: "80%" };
+		const percentage: DcpConfig = { minCompressContext: "25%", maxCompressContext: "80%", debugMarkerTrace: false };
 		const smallWindow = createNudgeController().evaluate(input("small", 300, percentage, 1_000));
 		assert.equal(smallWindow.decision?.level, "soft");
 
@@ -74,7 +74,7 @@ describe("DCP nudge policy", () => {
 
 	it("emits an iteration reminder after fifteen model/tool continuations", () => {
 		const controller = createNudgeController();
-		const highLimits: DcpConfig = { minCompressContext: 50_000, maxCompressContext: 100_000 };
+		const highLimits: DcpConfig = { minCompressContext: 50_000, maxCompressContext: 100_000, debugMarkerTrace: false };
 		assert.equal(controller.evaluate(input("user-leaf", 10, highLimits)).decision, undefined);
 		for (let step = 1; step < 15; step += 1) {
 			assert.equal(controller.evaluate(input(`tool-result-${step}`, 10, highLimits)).decision, undefined);
