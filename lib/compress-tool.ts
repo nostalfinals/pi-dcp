@@ -13,6 +13,7 @@ export interface CompressionRequestSnapshot {
 export interface CompressToolDetails {
 	ok: boolean;
 	blockIds?: string[];
+	supersededBlockIds?: string[];
 	estimatedTokensSaved?: number;
 	errors?: string[];
 }
@@ -79,14 +80,20 @@ export function createCompressTool(
 			}
 
 			const blockIds = prepared.value.ranges.map((item) => item.block.id);
+			const superseded = prepared.value.supersededBlockIds;
 			return {
 				content: [{
 					type: "text",
-					text: `Compressed ${blockIds.length} range${blockIds.length === 1 ? "" : "s"} into ${blockIds.join(", ")}. Estimated reduction: ~${prepared.value.estimatedTokensSaved} tokens.`,
+					text: [
+						`Compressed ${blockIds.length} range${blockIds.length === 1 ? "" : "s"} into ${blockIds.join(", ")}.`,
+						superseded.length > 0 ? ` Superseded ${superseded.join(", ")}.` : "",
+						` Estimated reduction: ~${prepared.value.estimatedTokensSaved} tokens.`,
+					].join(""),
 				}],
 				details: {
 					ok: true,
 					blockIds,
+					supersededBlockIds: superseded,
 					estimatedTokensSaved: prepared.value.estimatedTokensSaved,
 				},
 			};

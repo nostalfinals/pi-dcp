@@ -166,14 +166,58 @@ describe("compression preparation and outbound overlay", () => {
 		assert.deepEqual(overlay.messages, map.messages);
 	});
 
-	it("rejects active-block overlap and uneconomic summaries", () => {
+	it("supersedes every fully contained block without retaining inactive records", () => {
+		sequence = 0;
+		const map = mapMessages([
+			user(long("outside left")),
+			assistant([{ type: "text", text: long("inside one") }]),
+			user(long("inside two")),
+			assistant([{ type: "text", text: long("outside right") }]),
+			user("current"),
+		]);
+		const existing: DcpStateSnapshot = {
+			version: 1,
+			nextBlockNumber: 3,
+			activeBlocks: [
+				{ id: "b1", startEntryId: "entry-2", endEntryId: "entry-2", summary: "Old summary one", createdAt: 1 },
+				{ id: "b2", startEntryId: "entry-3", endEntryId: "entry-3", summary: "Old summary two", createdAt: 2 },
+			],
+		};
+		const prepared = prepareCompression(map, existing, [input("m001", "m004", "Unified investigation summary")], "tool-recompress");
+		assert.equal(prepared.ok, true);
+		if (!prepared.ok) return;
+		assert.deepEqual(prepared.value.supersededBlockIds, ["b1", "b2"]);
+		assert.deepEqual(prepared.value.state.activeBlocks.map((block) => block.id), ["b3"]);
+		assert.equal(prepared.value.state.nextBlockNumber, 4);
+
+		const overlay = applyCompressionOverlay(map, prepared.value.state);
+		assert.equal(overlay.ok, true);
+		assert.equal((JSON.stringify(overlay.messages).match(/<dcp-compression id=/g) ?? []).length, 1);
+		assert.doesNotMatch(JSON.stringify(overlay.messages), /Old summary/);
+	});
+
+	it("rejects contained and partial overlap with actionable block boundaries", () => {
+		sequence = 0;
+		const map = mapMessages([
+			user(long("left")),
+			assistant([{ type: "text", text: long("block left") }]),
+			user(long("block right")),
+			assistant([{ type: "text", text: long("right") }]),
+			user("current"),
+		]);
+		const block: CompressionBlock = { id: "b1", startEntryId: "entry-2", endEntryId: "entry-3", summary: "existing", createdAt: 1 };
+		const contained = prepareCompression(map, stateWith(block), [input("m002", "m002")], "tool-contained");
+		assert.equal(contained.ok, false);
+		if (!contained.ok) assert.match(contained.errors.join(" "), /contained by active block b1 \(m002\.\.m003\)/);
+
+		const partial = prepareCompression(map, stateWith(block), [input("m001", "m002")], "tool-partial");
+		assert.equal(partial.ok, false);
+		if (!partial.ok) assert.match(partial.errors.join(" "), /partially overlaps active block b1 \(m002\.\.m003\)/);
+	});
+
+	it("rejects uneconomic summaries", () => {
 		sequence = 0;
 		const map = mapMessages([user(long("old")), assistant([{ type: "text", text: long("answer") }]), user("current")]);
-		const block: CompressionBlock = { id: "b1", startEntryId: "entry-1", endEntryId: "entry-1", summary: "existing", createdAt: 1 };
-		const overlap = prepareCompression(map, stateWith(block), [input("m001", "m002")], "tool-2");
-		assert.equal(overlap.ok, false);
-		if (!overlap.ok) assert.match(overlap.errors.join(" "), /active block b1/);
-
 		const hugeSummary = "summary".repeat(2_000);
 		const uneconomic = prepareCompression(map, createEmptyState(), [input("m001", "m001", hugeSummary)], "tool-3");
 		assert.equal(uneconomic.ok, false);

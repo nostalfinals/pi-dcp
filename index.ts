@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { registerDcpCommand } from "./lib/commands.js";
 import { createCompressTool, type CompressionRequestSnapshot } from "./lib/compress-tool.js";
 import { applyCompressionOverlay } from "./lib/compression.js";
 import { DEFAULT_CONFIG, loadConfig } from "./lib/config.js";
@@ -34,6 +35,7 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 	}
 
 	pi.registerTool(createCompressTool(state, () => latestSnapshot));
+	registerDcpCommand(pi, state);
 
 	pi.on("session_start", async (_event, ctx) => restore(ctx, true));
 	pi.on("session_tree", async (_event, ctx) => restore(ctx, false));

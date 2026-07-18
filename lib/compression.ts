@@ -21,6 +21,7 @@ export interface PreparedRange {
 export interface PreparedCompression {
 	state: DcpStateSnapshot;
 	ranges: PreparedRange[];
+	supersededBlockIds: string[];
 	estimatedTokensSaved: number;
 }
 
@@ -160,7 +161,13 @@ export function prepareCompression(
 	if (existing.errors.length > 0) return { ok: false, errors: existing.errors };
 	const protectedStart = activeWorkStart(map);
 	const protectedAlias = map.mappedMessages[protectedStart].alias;
-	const candidates: Array<{ inputIndex: number; input: CompressionRangeInput; normalized: NormalizedRange }> = [];
+	const candidates: Array<{
+		inputIndex: number;
+		input: CompressionRangeInput;
+		normalized: NormalizedRange;
+		containedBlocks: IndexedBlock[];
+		effectiveTokens: number;
+	}> = [];
 	const errors: string[] = [];
 
 	for (const [inputIndex, input] of inputs.entries()) {
@@ -178,17 +185,43 @@ export function prepareCompression(
 			errors.push(`${prefix} reaches active work at ${protectedAlias}; choose an older endId`);
 			continue;
 		}
-		const existingOverlap = existing.indexed.find((block) => overlap(
+		const overlappingBlocks = existing.indexed.filter((block) => overlap(
 			normalized.value.startMessageIndex,
 			normalized.value.endMessageIndex,
 			block.start,
 			block.end,
 		));
-		if (existingOverlap) {
-			errors.push(`${prefix} overlaps active block ${existingOverlap.block.id}`);
+		const containedBlocks = overlappingBlocks.filter((block) => (
+			normalized.value.startMessageIndex <= block.start && normalized.value.endMessageIndex >= block.end
+		));
+		const incompatible = overlappingBlocks.find((block) => !containedBlocks.includes(block));
+		if (incompatible) {
+			const blockStartAlias = map.mappedMessages[incompatible.start].alias;
+			const blockEndAlias = map.mappedMessages[incompatible.end].alias;
+			const relation = incompatible.start <= normalized.value.startMessageIndex && incompatible.end >= normalized.value.endMessageIndex
+				? "is contained by"
+				: "partially overlaps";
+			const safeChoices: string[] = [];
+			if (incompatible.start > 0) safeChoices.push(`end at or before ${map.mappedMessages[incompatible.start - 1].alias}`);
+			if (incompatible.end + 1 < map.mappedMessages.length) {
+				safeChoices.push(`start at or after ${map.mappedMessages[incompatible.end + 1].alias}`);
+			}
+			safeChoices.push(`fully contain ${incompatible.block.id}`);
+			errors.push(
+				`${prefix} ${relation} active block ${incompatible.block.id} (${blockStartAlias}..${blockEndAlias}); ${safeChoices.join(", or ")}`,
+			);
 			continue;
 		}
-		candidates.push({ inputIndex, input, normalized: normalized.value });
+
+		let effectiveTokens = normalized.value.estimatedTokens;
+		for (const contained of containedBlocks) {
+			const hiddenRawTokens = map.mappedMessages
+				.slice(contained.start, contained.end + 1)
+				.reduce((total, item) => total + item.estimatedTokens, 0);
+			effectiveTokens -= hiddenRawTokens;
+			effectiveTokens += estimateMessageTokens(createCompressionSummaryMessage(contained.block));
+		}
+		candidates.push({ inputIndex, input, normalized: normalized.value, containedBlocks, effectiveTokens });
 	}
 
 	for (let left = 0; left < candidates.length; left += 1) {
@@ -208,6 +241,7 @@ export function prepareCompression(
 	let nextBlockNumber = state.nextBlockNumber;
 	let estimatedTokensSaved = 0;
 	const prepared: PreparedRange[] = [];
+	const supersededBlockIds = new Set<string>();
 	for (const candidate of candidates) {
 		const summary = candidate.input.summary.trim();
 		const topic = candidate.input.topic?.trim();
@@ -221,14 +255,15 @@ export function prepareCompression(
 		};
 		if (topic) block.topic = topic;
 		const replacementTokens = estimateMessageTokens(createCompressionSummaryMessage(block));
-		if (candidate.normalized.estimatedTokens <= replacementTokens) {
+		if (candidate.effectiveTokens <= replacementTokens) {
 			errors.push(
-				`ranges[${candidate.inputIndex}] is not beneficial: raw ~${candidate.normalized.estimatedTokens} tokens, replacement ~${replacementTokens}`,
+				`ranges[${candidate.inputIndex}] is not beneficial: current outbound section ~${candidate.effectiveTokens} tokens, replacement ~${replacementTokens}`,
 			);
 			continue;
 		}
 		prepared.push({ block, normalized: candidate.normalized, replacementTokens });
-		estimatedTokensSaved += candidate.normalized.estimatedTokens - replacementTokens;
+		for (const contained of candidate.containedBlocks) supersededBlockIds.add(contained.block.id);
+		estimatedTokensSaved += candidate.effectiveTokens - replacementTokens;
 		nextBlockNumber += 1;
 	}
 	if (errors.length > 0) return { ok: false, errors };
@@ -239,9 +274,13 @@ export function prepareCompression(
 			state: {
 				version: 1,
 				nextBlockNumber,
-				activeBlocks: [...state.activeBlocks.map((block) => ({ ...block })), ...prepared.map((item) => item.block)],
+				activeBlocks: [
+					...state.activeBlocks.filter((block) => !supersededBlockIds.has(block.id)).map((block) => ({ ...block })),
+					...prepared.map((item) => item.block),
+				],
 			},
 			ranges: prepared,
+			supersededBlockIds: [...supersededBlockIds],
 			estimatedTokensSaved,
 		},
 	};

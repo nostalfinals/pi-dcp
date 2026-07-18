@@ -556,7 +556,22 @@ Exit criteria:
 
 - A real Pi session can compress an old investigation range and continue successfully with Anthropic- and OpenAI-style tool protocols.
 
-### Phase 4 — Overlap, supersession, and decompress
+### Phase 4 — Overlap, supersession, and decompress ✅
+
+**Status:** Completed on 2026-07-18.
+
+Implemented:
+
+- Full-containment recompression that supersedes all contained active blocks.
+- Benefit estimation against the effective outbound section, including existing synthetic summaries.
+- Rejection of contained and partial overlaps with safe neighboring-boundary guidance.
+- Monotonic block numbering with latest snapshots containing active blocks only.
+- `/dcp`, `/dcp context`, `/dcp decompress`, and `/dcp decompress <block-id>` behavior.
+- Restorability checks against Pi's current compaction-aware context entries.
+- Conservative native-compaction diagnostics instead of false decompression success.
+- Branch-local decompression through append-first complete state snapshots.
+- Original-message restoration on the next outbound context build without session mutation.
+- Tests for nested recompression, bounded state, stale blocks, command behavior, and sibling-branch isolation.
 
 Deliverables:
 
