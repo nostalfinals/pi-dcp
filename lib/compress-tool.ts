@@ -55,7 +55,7 @@ export function createCompressTool(
 	return {
 		name: "compress",
 		label: "Compress context",
-		description: "Replace one or more old message ranges with your supplied high-fidelity summaries. Use only visible mNNN IDs. The operation is atomic and leaves the session history intact.",
+		description: "Replace one or more old message ranges with your supplied high-fidelity summaries. Use only visible mNNN IDs.",
 		promptSnippet: "Compress old context ranges using model-written summaries",
 		promptGuidelines: [
 			"Use compress only for completed, older work; never include the current active work segment.",
