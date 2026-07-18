@@ -442,7 +442,21 @@ Exit criteria:
 - No implementation dependency on private Pi internals when a public export exists.
 - Any unavoidable mapping limitation is documented before proceeding.
 
-### Phase 1 — Configuration and state persistence
+### Phase 1 — Configuration and state persistence ✅
+
+**Status:** Completed on 2026-07-18.
+
+Implemented:
+
+- Reproducible TypeScript package scaffold with declared Pi peer/development dependencies.
+- Global and project `dcp.json` loading with project overrides.
+- Positive token-count and percentage parsing, defaults, validation, and model-window resolution.
+- Versioned, strictly validated, defensively cloned DCP state snapshots.
+- Branch-local persistence through `pi.appendEntry("pi-dcp-state", snapshot)`.
+- Active-branch restore on `session_start` and `session_tree`.
+- Invalid/future state rejection with fallback to the latest valid snapshot.
+- Unit tests plus real Pi `SessionManager` branch-isolation tests.
+- Clean typecheck, test suite, and `pi -e .` extension-load smoke test.
 
 Deliverables:
 
