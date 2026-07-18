@@ -664,7 +664,21 @@ Exit criteria:
 
 - Long integration test with repeated DCP and Pi native compactions shows bounded active state and no silent stale records.
 
-### Phase 7 — Packaging, documentation, and trial release
+### Phase 7 — Packaging, documentation, and trial release ✅
+
+**Status:** Completed on 2026-07-18.
+
+Implemented:
+
+- Source-first private `0.1.0` local/Git experimental Pi package metadata.
+- MIT license with copyright assigned to nostalfinals.
+- README covering installation, two-field configuration, automatic behavior, commands, cache trade-offs, recovery, native compaction, and known limitations.
+- Explicit independent-implementation attribution for OpenCode-DCP behavioral research with no AGPL source dependency or inclusion.
+- Changelog for the initial trial release.
+- GitHub Actions verification on Node.js 20, 22, and 24, including a Node 24 Pi extension-load smoke test.
+- `verify` script plus package-content validation excluding tests and planning artifacts.
+- Clean-install verification with 66 passing tests and no undeclared runtime imports.
+- Successful local installation through `pi install /home/nostalfinals/Projects/pi-dcp`, `pi list` verification, and installed-package smoke load.
 
 Deliverables:
 

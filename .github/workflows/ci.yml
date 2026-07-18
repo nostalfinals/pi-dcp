@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+
+      - name: Smoke-load the Pi extension
+        if: matrix.node == 24
+        shell: bash
+        run: |
+          set +e
+          timeout 3s script -qfec 'pi -e . --offline --no-skills --no-context-files' /tmp/pi-dcp-smoke.log
+          status=$?
+          set -e
+          if [[ $status -ne 0 && $status -ne 124 ]]; then
+            cat /tmp/pi-dcp-smoke.log
+            exit $status
+          fi
+          if grep -aE 'Error|Failed' /tmp/pi-dcp-smoke.log; then
+            cat /tmp/pi-dcp-smoke.log
+            exit 1
+          fi

@@ -1,15 +1,29 @@
 {
   "name": "pi-dcp",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Branch-aware agentic dynamic context pruning for Pi",
+  "author": "nostalfinals",
+  "license": "MIT",
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "pi",
+    "context-management",
+    "context-compression",
+    "agentic"
+  ],
+  "files": [
+    "index.ts",
+    "lib/**/*.ts",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "scripts": {
     "check": "tsc --noEmit",
-    "test": "tsx --test test/**/*.test.ts"
+    "test": "tsx --test test/**/*.test.ts",
+    "verify": "npm run check && npm test"
   },
   "pi": {
     "extensions": [
