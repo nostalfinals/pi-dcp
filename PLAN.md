@@ -517,7 +517,22 @@ Exit criteria:
 - Mapping failures pass original context through unchanged.
 - Provider-compatible message invariants hold in fixture tests.
 
-### Phase 3 — Compress tool and outbound pruning
+### Phase 3 — Compress tool and outbound pruning ✅
+
+**Status:** Completed on 2026-07-18.
+
+Implemented:
+
+- Sequential `compress` tool with one atomic multi-range call schema.
+- Exact request-snapshot and active-branch freshness checks before execution.
+- All-before-mutation validation for aliases, ordering, tool groups, active work, range overlap, and context-size benefit.
+- Monotonic block allocation and append-first atomic state commits.
+- Pure outbound overlays that replace source ranges with one synthetic DCP summary each.
+- Historical `compress` summary-argument scrubbing without mutating session messages.
+- Whole-current-segment protection, including in-flight tool loops.
+- Fail-open overlay behavior for stale or inconsistent persisted boundaries.
+- Real Pi `SessionManager` tests proving branch rejection, persistent snapshots, repeated fresh-context pruning, and intact source JSONL entries.
+- Canonical sequential and parallel tool-protocol verification suitable for Pi's Anthropic/OpenAI provider adapters.
 
 Deliverables:
 

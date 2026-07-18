@@ -111,4 +111,16 @@ describe("state snapshots", () => {
 		store.persist();
 		assert.equal((persisted as DcpStateSnapshot).nextBlockNumber, 3);
 	});
+
+	it("commits to the branch log before advancing in-memory state", () => {
+		const failing = createStateStore({ appendEntry: () => { throw new Error("disk full"); } });
+		assert.throws(() => failing.commit(snapshot(2)), /disk full/);
+		assert.deepEqual(failing.get(), createEmptyState());
+
+		let persisted: unknown;
+		const working = createStateStore({ appendEntry: (_type, data) => { persisted = data; } });
+		working.commit(snapshot(2));
+		assert.equal((persisted as DcpStateSnapshot).nextBlockNumber, 2);
+		assert.equal(working.get().nextBlockNumber, 2);
+	});
 });

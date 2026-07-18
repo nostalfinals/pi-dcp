@@ -13,6 +13,7 @@ export interface StateStore {
 	restore(branch: readonly SessionEntry[]): RestoredState;
 	replace(next: DcpStateSnapshot): void;
 	persist(): void;
+	commit(next: DcpStateSnapshot): void;
 }
 
 export function appendStateSnapshot(
@@ -45,6 +46,13 @@ export function createStateStore(pi: Pick<ExtensionAPI, "appendEntry">): StateSt
 		},
 		persist() {
 			appendStateSnapshot(pi, current);
+		},
+		commit(next) {
+			const parsed = parseStateSnapshot(next);
+			if (!parsed.state) throw new Error(`Invalid DCP state: ${parsed.errors.join("; ")}`);
+			// Append first so an I/O failure cannot leave memory ahead of the branch log.
+			appendStateSnapshot(pi, parsed.state);
+			current = parsed.state;
 		},
 	};
 }
