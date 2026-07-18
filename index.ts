@@ -59,7 +59,7 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 	pi.on("before_agent_start", async (event) => ({
 		systemPrompt: [
 			event.systemPrompt,
-			"DCP message markers are read-only metadata. When calling the `compress` tool, reference only their IDs; never output, quote, or reproduce the markers.",
+			"DCP message markers are read-only metadata. `id` labels the message carrying the marker; `previous-assistant-id` labels the immediately preceding assistant message. When calling the `compress` tool, reference only these IDs; never output, quote, or reproduce the markers.",
 		].join("\n\n"),
 	}));
 	pi.on("message_update", async (event) => {
@@ -91,12 +91,13 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 			return { messages: event.messages };
 		}
 
+		const overlay = applyCompressionOverlay(mapped.value, state.get());
 		latestSnapshot = {
 			map: mapped.value,
+			visibleAliases: overlay.ok ? overlay.visibleAliases : mapped.value.visibleAliases,
 			sessionId: ctx.sessionManager.getSessionId(),
 			anchorLeafId: ctx.sessionManager.getLeafId(),
 		};
-		const overlay = applyCompressionOverlay(mapped.value, state.get());
 		if (!overlay.ok) {
 			warnOnce([`compression overlay disabled for this request: ${overlay.errors.join("; ")}`]);
 			traceMarker("context.outbound.overlay-failed", overlay.messages, true, false);

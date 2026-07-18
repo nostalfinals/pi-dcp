@@ -22,5 +22,8 @@ Initial experimental local/Git trial release.
 ### Fixed
 
 - Compact one-decimal `k` formatting for compression savings at 1,000 tokens and above.
-- Model-emitted DCP markers are removed from finalized assistant output before persistence; direct assistant request-overlay markers are restored for a runtime behavior trial and constrained by system guidance.
+- Model-emitted DCP markers are removed from finalized assistant output before persistence.
+- DCP no longer injects metadata into assistant payloads. The following non-assistant message carries the preceding assistant alias, avoiding provider-visible assistant mutation while retaining range references.
 - Strong-reminder false positives caused by serializing provider metadata instead of using Pi context usage.
+- Compression savings no longer count JSON structure, provider accounting, or thinking signatures as prompt text; range estimates now use Pi's content-only token heuristic.
+- Successful compression output now reports removed source tokens, added summary tokens, and net reduction separately.

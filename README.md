@@ -114,7 +114,7 @@ Percentages are resolved against the active model's context window. The minimum 
 pi 2>/tmp/pi-dcp-marker-debug.log
 ```
 
-A `message_update` or `message_end.before-sanitize` record proves that a marker entered model-generated assistant output. If only `context.outbound` records appear while the UI flashes a marker, the request overlay/TUI path is the likely source.
+A `message_update` or `message_end.before-sanitize` record proves that a marker entered model-generated assistant output. Assistant payloads are never annotated by DCP; their aliases are carried by the following non-assistant message. Any generated marker is therefore imitation and is removed before persistence.
 
 Threshold behavior:
 
@@ -183,7 +183,7 @@ DCP stores complete `pi-dcp-state` snapshots as Pi custom entries on the active 
 
 ## Prompt-cache and context trade-offs
 
-DCP assigns every context message a deterministic request-local alias and injects a compact marker into the request overlay. Assistant markers are placed after signed thinking and before assistant text/tool calls. A system instruction marks them as read-only metadata, and finalized model output is sanitized before persistence if the model imitates a marker. Pi may still briefly render request-overlay or partially streamed markers in runtime views; this trial behavior is intentionally being evaluated. Existing aliases stay stable as append-only context grows, so normal requests add only a suffix.
+DCP assigns every context message a deterministic request-local alias and injects compact markers only into non-assistant request-overlay messages. A carrier marker can identify both its own message and the immediately preceding assistant, for example `<dcp-message id="m018" previous-assistant-id="m017" />`. This keeps provider-owned assistant payloads byte-for-byte clean while preserving addressable assistant boundaries. A trailing assistant without a later carrier is intentionally not accepted as a compression boundary. A system instruction marks metadata as read-only, and finalized model output is sanitized before persistence if the model imitates a marker. Existing aliases stay stable as append-only context grows, so normal requests add only a suffix.
 
 Creating, superseding, or decompressing a block changes the prompt at that range's anchor and therefore loses cache from that point for the first changed request. Pi native compaction also changes the conversation prefix. Later requests can cache the new stable prefix.
 

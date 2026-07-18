@@ -70,7 +70,8 @@ describe("extension message finalization", () => {
 
 		assert.match(result?.systemPrompt ?? "", /^base/);
 		assert.match(result?.systemPrompt ?? "", /read-only metadata/);
-		assert.match(result?.systemPrompt ?? "", /reference only their IDs/);
+		assert.match(result?.systemPrompt ?? "", /previous-assistant-id.*preceding assistant/);
+		assert.match(result?.systemPrompt ?? "", /reference only these IDs/);
 		assert.match(result?.systemPrompt ?? "", /never output, quote, or reproduce/);
 	});
 

@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import {
+	estimateTokens as estimatePiTokens,
 	sessionEntryToContextMessages,
 	type ContextEvent,
 	type SessionEntry,
@@ -22,6 +23,7 @@ export interface MessageMap {
 	mappedMessages: MappedMessage[];
 	byAlias: ReadonlyMap<string, MappedMessage>;
 	byEntryId: ReadonlyMap<string, MappedMessage>;
+	visibleAliases: ReadonlySet<string>;
 }
 
 export type MessageMapResult =
@@ -31,8 +33,9 @@ export type MessageMapResult =
 const ANNOTATION_PATTERN = /^<dcp-message id="m\d+"(?: previous-assistant-id="m\d+")? \/>\n?/;
 const ASSISTANT_ANNOTATION_PATTERN = /(?:\n?<dcp-message id="m\d+"(?: previous-assistant-id="m\d+")? \/>\n?|\s*<!-- dcp-message id="m\d+" -->\s*)/g;
 
-function marker(alias: string): string {
-	return `<dcp-message id="${alias}" />`;
+function marker(alias: string, previousAssistantAlias?: string): string {
+	const previous = previousAssistantAlias ? ` previous-assistant-id="${previousAssistantAlias}"` : "";
+	return `<dcp-message id="${alias}"${previous} />`;
 }
 
 function stripAssistantAnnotationText(text: string): string {
@@ -98,22 +101,19 @@ export function stripMessageAnnotation(message: AgentMessage): AgentMessage {
 	return copy;
 }
 
-/** Add a request-local alias without mutating the source message. */
-export function annotateMessage(message: AgentMessage, alias: string): AgentMessage {
+/**
+ * Add a request-local alias without mutating the source message.
+ * Assistant messages are deliberately left clean: the next non-assistant
+ * message carries their alias so providers never receive injected assistant text.
+ */
+export function annotateMessage(
+	message: AgentMessage,
+	alias: string,
+	previousAssistantAlias?: string,
+): AgentMessage {
 	const copy = stripMessageAnnotation(message) as AgentMessage & Record<string, unknown>;
-	const annotation = marker(alias);
-
-	if (copy.role === "assistant" && Array.isArray(copy.content)) {
-		// Keep signed thinking first, and keep annotation text before any tool calls.
-		let insertionIndex = 0;
-		while (copy.content[insertionIndex]?.type === "thinking") insertionIndex += 1;
-		copy.content = [
-			...copy.content.slice(0, insertionIndex),
-			{ type: "text", text: `${annotation}\n` },
-			...copy.content.slice(insertionIndex),
-		];
-		return copy;
-	}
+	if (copy.role === "assistant") return copy;
+	const annotation = marker(alias, previousAssistantAlias);
 
 	if ("content" in copy) {
 		if (typeof copy.content === "string") copy.content = `${annotation}\n${copy.content}`;
@@ -131,22 +131,9 @@ export function annotateMessage(message: AgentMessage, alias: string): AgentMess
 	return copy;
 }
 
-function jsonForEstimation(message: AgentMessage): string {
-	try {
-		return JSON.stringify(message, (key, value: unknown) => {
-			// Timestamps and provider accounting do not enter the prompt body.
-			if (key === "timestamp" || key === "usage" || key === "cost") return undefined;
-			return value;
-		}) ?? "";
-	} catch {
-		return "";
-	}
-}
-
-/** Conservative, provider-neutral estimate used only to reject uneconomic ranges. */
+/** Use Pi's content-only heuristic; provider metadata and thinking signatures are not prompt text. */
 export function estimateMessageTokens(message: AgentMessage): number {
-	const characters = jsonForEstimation(stripMessageAnnotation(message)).length;
-	return Math.max(1, Math.ceil(characters / 4) + 4);
+	return Math.max(1, estimatePiTokens(stripMessageAnnotation(message)));
 }
 
 function projectedMessages(entries: readonly SessionEntry[]): Array<{
@@ -206,7 +193,17 @@ export function buildMessageMap(
 
 	// A fixed minimum width keeps every existing alias stable when the context grows past m999.
 	const aliasFor = (index: number) => `m${String(index + 1).padStart(3, "0")}`;
-	const annotated = stripped.map((message, index) => annotateMessage(message, aliasFor(index)));
+	const visibleAliases = new Set<string>();
+	const annotated = stripped.map((message, index) => {
+		const alias = aliasFor(index);
+		if (message.role === "assistant") return annotateMessage(message, alias);
+		visibleAliases.add(alias);
+		const previousAlias = index > 0 && stripped[index - 1].role === "assistant"
+			? aliasFor(index - 1)
+			: undefined;
+		if (previousAlias) visibleAliases.add(previousAlias);
+		return annotateMessage(message, alias, previousAlias);
+	});
 	const mappedMessages: MappedMessage[] = projected.map((item, messageIndex) => {
 		const alias = aliasFor(messageIndex);
 		return {
@@ -227,6 +224,7 @@ export function buildMessageMap(
 			mappedMessages,
 			byAlias: new Map(mappedMessages.map((item) => [item.alias, item])),
 			byEntryId: new Map(mappedMessages.map((item) => [item.entryId, item])),
+			visibleAliases,
 		},
 	};
 }

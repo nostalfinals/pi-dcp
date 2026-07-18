@@ -145,6 +145,28 @@ describe("compression preparation and outbound overlay", () => {
 		if (!unsafe.ok) assert.match(unsafe.errors.join(" "), /active work/);
 	});
 
+	it("removes a covered assistant alias from its surviving carrier", () => {
+		sequence = 0;
+		const map = mapMessages([
+			user("old request"),
+			assistant([{ type: "text", text: long("old response") }]),
+			user("current work"),
+		]);
+		assert.match(JSON.stringify(map.messages[2]), /previous-assistant-id=\\"m002/);
+		const overlay = applyCompressionOverlay(map, stateWith({
+			id: "b1",
+			startEntryId: "entry-2",
+			endEntryId: "entry-2",
+			summary: "Preserved response.",
+			createdAt: 1,
+		}));
+		assert.equal(overlay.ok, true);
+		if (!overlay.ok) return;
+		assert.doesNotMatch(JSON.stringify(overlay.messages), /previous-assistant-id=\\"m002/);
+		assert.equal(overlay.visibleAliases.has("m002"), false);
+		assert.equal(overlay.visibleAliases.has("m003"), true);
+	});
+
 	it("fails open if persisted boundaries would orphan a tool result", () => {
 		sequence = 0;
 		const map = mapMessages([

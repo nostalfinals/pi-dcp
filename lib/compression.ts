@@ -1,5 +1,5 @@
 import type { AgentMessage, MessageMap } from "./message-map.js";
-import { estimateMessageTokens } from "./message-map.js";
+import { annotateMessage, estimateMessageTokens } from "./message-map.js";
 import { findToolProtocolIssues, normalizeRange, type NormalizedRange } from "./range.js";
 import type { CompressionBlock, DcpStateSnapshot } from "./types.js";
 
@@ -30,7 +30,7 @@ export type PrepareCompressionResult =
 	| { ok: false; errors: string[] };
 
 export type CompressionOverlayResult =
-	| { ok: true; messages: AgentMessage[] }
+	| { ok: true; messages: AgentMessage[]; visibleAliases: ReadonlySet<string> }
 	| { ok: false; messages: AgentMessage[]; errors: string[] };
 
 interface IndexedBlock {
@@ -117,11 +117,27 @@ export function applyCompressionOverlay(map: MessageMap, state: DcpStateSnapshot
 	}
 
 	const messages: AgentMessage[] = [];
+	const visibleAliases = new Set<string>();
 	for (const item of map.mappedMessages) {
 		const block = starts.get(item.messageIndex);
 		if (block) messages.push(createCompressionSummaryMessage(block.block));
 		if (covered.has(item.messageIndex)) continue;
-		messages.push(scrubHistoricalCompressArguments(map.messages[item.messageIndex]));
+
+		const scrubbed = scrubHistoricalCompressArguments(item.message);
+		if (scrubbed.role === "assistant") {
+			messages.push(annotateMessage(scrubbed, item.alias));
+			continue;
+		}
+
+		visibleAliases.add(item.alias);
+		const previous = item.messageIndex > 0
+			? map.mappedMessages[item.messageIndex - 1]
+			: undefined;
+		const previousAlias = previous?.message.role === "assistant" && !covered.has(previous.messageIndex)
+			? previous.alias
+			: undefined;
+		if (previousAlias) visibleAliases.add(previousAlias);
+		messages.push(annotateMessage(scrubbed, item.alias, previousAlias));
 	}
 	const protocolIssues = findToolProtocolIssues(messages);
 	if (protocolIssues.length > 0) {
@@ -131,7 +147,7 @@ export function applyCompressionOverlay(map: MessageMap, state: DcpStateSnapshot
 			errors: [`compression overlay would break tool history: ${protocolIssues.join("; ")}`],
 		};
 	}
-	return { ok: true, messages };
+	return { ok: true, messages, visibleAliases };
 }
 
 function activeWorkStart(map: MessageMap): number {

@@ -6,6 +6,7 @@ import type { StateStore } from "./persistence.js";
 
 export interface CompressionRequestSnapshot {
 	map: MessageMap;
+	visibleAliases: ReadonlySet<string>;
 	sessionId: string;
 	anchorLeafId: string | null;
 }
@@ -14,6 +15,8 @@ export interface CompressToolDetails {
 	ok: boolean;
 	blockIds?: string[];
 	supersededBlockIds?: string[];
+	estimatedTokensRemoved?: number;
+	estimatedSummaryTokens?: number;
 	estimatedTokensSaved?: number;
 	errors?: string[];
 }
@@ -70,6 +73,14 @@ export function createCompressTool(
 			const staleReason = snapshotIsCurrent(snapshot, ctx);
 			if (staleReason) return errorResult([staleReason]);
 
+			const invisibleErrors = (params.ranges as CompressionRangeInput[]).flatMap((range, index) => {
+				const errors: string[] = [];
+				if (!snapshot.visibleAliases.has(range.startId)) errors.push(`ranges[${index}].startId ${range.startId} was not visible in the request snapshot`);
+				if (!snapshot.visibleAliases.has(range.endId)) errors.push(`ranges[${index}].endId ${range.endId} was not visible in the request snapshot`);
+				return errors;
+			});
+			if (invisibleErrors.length > 0) return errorResult(invisibleErrors);
+
 			const prepared = prepareCompression(
 				snapshot.map,
 				state.get(),
@@ -86,19 +97,29 @@ export function createCompressTool(
 
 			const blockIds = prepared.value.ranges.map((item) => item.block.id);
 			const superseded = prepared.value.supersededBlockIds;
+			const estimatedSummaryTokens = prepared.value.ranges.reduce(
+				(total, item) => total + item.replacementTokens,
+				0,
+			);
+			const estimatedTokensRemoved = prepared.value.estimatedTokensSaved + estimatedSummaryTokens;
 			return {
 				content: [{
 					type: "text",
 					text: [
 						`Compressed ${blockIds.length} range${blockIds.length === 1 ? "" : "s"} into ${blockIds.join(", ")}.`,
 						superseded.length > 0 ? ` Superseded ${superseded.join(", ")}.` : "",
-						` Estimated reduction: ~${formatTokenEstimate(prepared.value.estimatedTokensSaved)} tokens.`,
+						"\n",
+						`Removed ~${formatTokenEstimate(estimatedTokensRemoved)} tokens; `,
+						`added ~${formatTokenEstimate(estimatedSummaryTokens)} summary tokens; `,
+						`net reduction ~${formatTokenEstimate(prepared.value.estimatedTokensSaved)} tokens.`,
 					].join(""),
 				}],
 				details: {
 					ok: true,
 					blockIds,
 					supersededBlockIds: superseded,
+					estimatedTokensRemoved,
+					estimatedSummaryTokens,
 					estimatedTokensSaved: prepared.value.estimatedTokensSaved,
 				},
 			};

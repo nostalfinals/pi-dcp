@@ -80,14 +80,13 @@ describe("message mapping", () => {
 		assert.equal(assistant.role, "assistant");
 		if (assistant.role === "assistant") {
 			assert.equal(assistant.content[0].type, "thinking", "signed thinking must remain first");
-			assert.deepEqual(assistant.content[1], { type: "text", text: '<dcp-message id="m002" />\n' });
-			assert.deepEqual(assistant.content[2], { type: "text", text: "answer" });
-			assert.deepEqual(stripMessageAnnotation(assistant), outbound[1]);
+			assert.deepEqual(assistant.content[1], { type: "text", text: "answer" });
+			assert.deepEqual(assistant, outbound[1], "assistant payload must not be annotated");
 		}
-		assert.match(JSON.stringify(result.value.messages[2]), /dcp-message id=\\"m003/);
-		assert.doesNotMatch(JSON.stringify(result.value.messages[2]), /previous-assistant-id/);
+		assert.match(JSON.stringify(result.value.messages[2]), /dcp-message id=\\"m003\\" previous-assistant-id=\\"m002/);
 		assert.match(JSON.stringify(result.value.messages[3]), /dcp-message id=\\"m004/);
 		assert.match(JSON.stringify(result.value.messages[4]), /dcp-message id=\\"m005/);
+		assert.deepEqual([...result.value.visibleAliases], ["m001", "m003", "m002", "m004", "m005"]);
 	});
 
 	it("annotates image messages without changing image payloads", () => {
@@ -108,55 +107,61 @@ describe("message mapping", () => {
 		}
 	});
 
-	it("annotates tool-calling assistant messages before the first tool call", () => {
+	it("carries a tool-calling assistant alias on the following tool result", () => {
 		entryNumber = 0;
-		const entries = [entry({
-			type: "message",
-			message: {
-				role: "assistant",
-				content: [{ type: "toolCall", id: "call-1", name: "read", arguments: { path: "file" } }],
-				api: "test",
-				provider: "test",
-				model: "test",
-				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
-				stopReason: "toolUse",
-				timestamp: 1,
-			},
-		})];
+		const entries = [
+			entry({
+				type: "message",
+				message: {
+					role: "assistant",
+					content: [{ type: "toolCall", id: "call-1", name: "read", arguments: { path: "file" } }],
+					api: "test",
+					provider: "test",
+					model: "test",
+					usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+					stopReason: "toolUse",
+					timestamp: 1,
+				},
+			}),
+			entry({
+				type: "message",
+				message: { role: "toolResult", toolCallId: "call-1", toolName: "read", content: [{ type: "text", text: "result" }], isError: false, timestamp: 2 },
+			}),
+		];
 		const mapped = buildMessageMap(entries, messagesFor(entries));
 		assert.equal(mapped.ok, true);
 		if (!mapped.ok) return;
-		const message = mapped.value.messages[0];
-		assert.equal(message.role, "assistant");
-		if (message.role === "assistant") {
-			assert.deepEqual(message.content[0], { type: "text", text: '<dcp-message id="m001" />\n' });
-			assert.equal(message.content[1]?.type, "toolCall");
-		}
+		assert.deepEqual(mapped.value.messages[0], messagesFor(entries)[0]);
+		assert.match(JSON.stringify(mapped.value.messages[1]), /id=\\"m002\\" previous-assistant-id=\\"m001/);
+		assert.deepEqual([...mapped.value.visibleAliases], ["m002", "m001"]);
 	});
 
-	it("maps legacy assistant marker pollution and reapplies the current alias", () => {
+	it("strips legacy assistant marker pollution and moves the alias to a carrier", () => {
 		entryNumber = 0;
-		const entries = [entry({
-			type: "message",
-			message: {
-				role: "assistant",
-				content: [
-					{ type: "text", text: '<dcp-message id="m777" />\n' },
-					{ type: "toolCall", id: "call-1", name: "read", arguments: { path: "file" } },
-				],
-				api: "test",
-				provider: "test",
-				model: "test",
-				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
-				stopReason: "toolUse",
-				timestamp: 1,
-			},
-		})];
+		const entries = [
+			entry({
+				type: "message",
+				message: {
+					role: "assistant",
+					content: [
+						{ type: "text", text: '<dcp-message id="m777" />\n' },
+						{ type: "toolCall", id: "call-1", name: "read", arguments: { path: "file" } },
+					],
+					api: "test",
+					provider: "test",
+					model: "test",
+					usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+					stopReason: "toolUse",
+					timestamp: 1,
+				},
+			}),
+			entry({ type: "message", message: { role: "user", content: "next", timestamp: 2 } }),
+		];
 		const mapped = buildMessageMap(entries, messagesFor(entries));
 		assert.equal(mapped.ok, true);
 		if (!mapped.ok) return;
-		assert.match(JSON.stringify(mapped.value.messages[0]), /dcp-message id=\\"m001/);
-		assert.doesNotMatch(JSON.stringify(mapped.value.messages[0]), /m777/);
+		assert.doesNotMatch(JSON.stringify(mapped.value.messages[0]), /dcp-message|m777/);
+		assert.match(JSON.stringify(mapped.value.messages[1]), /id=\\"m002\\" previous-assistant-id=\\"m001/);
 	});
 
 	it("strips inline model-emitted assistant markers", () => {
@@ -248,7 +253,7 @@ describe("message mapping", () => {
 		}
 	});
 
-	it("estimates raw content without charging DCP annotations", () => {
+	it("estimates prompt content without charging annotations or provider metadata", () => {
 		const raw = { role: "user", content: "x".repeat(400), timestamp: 1 } as AgentMessage;
 		entryNumber = 0;
 		const entries = [entry({ type: "message", message: raw })];
@@ -256,6 +261,18 @@ describe("message mapping", () => {
 		assert.equal(mapped.ok, true);
 		if (!mapped.ok) return;
 		assert.equal(estimateMessageTokens(mapped.value.messages[0]), estimateMessageTokens(raw));
-		assert.ok(estimateMessageTokens(raw) >= 100);
+		assert.equal(estimateMessageTokens(raw), 100);
+
+		const signed = {
+			role: "assistant",
+			content: [{ type: "thinking", thinking: "brief thought", thinkingSignature: "s".repeat(100_000) }],
+			api: "provider-api-".repeat(1_000),
+			provider: "provider-name-".repeat(1_000),
+			model: "model-name-".repeat(1_000),
+			usage: { input: 999_999, output: 999_999, cacheRead: 999_999, cacheWrite: 999_999, totalTokens: 3_999_996, cost: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1, total: 4 } },
+			stopReason: "stop",
+			timestamp: 1,
+		} as AgentMessage;
+		assert.ok(estimateMessageTokens(signed) < 10, "signatures and accounting metadata must not inflate range savings");
 	});
 });
