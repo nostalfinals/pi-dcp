@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerDcpCommand } from "./lib/commands.js";
+import { reconcileStateStore } from "./lib/compaction-sync.js";
 import { createCompressTool, type CompressionRequestSnapshot } from "./lib/compress-tool.js";
 import { applyCompressionOverlay } from "./lib/compression.js";
 import { DEFAULT_CONFIG, loadConfig } from "./lib/config.js";
@@ -23,6 +24,14 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 		console.warn(warning);
 	}
 
+	function reconcile(ctx: ExtensionContext): void {
+		try {
+			reconcileStateStore(ctx.sessionManager.buildContextEntries(), state);
+		} catch (error) {
+			warnOnce([`failed to persist native-compaction cleanup: ${error instanceof Error ? error.message : String(error)}`]);
+		}
+	}
+
 	function restore(ctx: ExtensionContext, reloadConfig: boolean): void {
 		latestSnapshot = undefined;
 		nudges.reset();
@@ -30,6 +39,7 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 		if (restored.invalidEntryIds.length > 0) {
 			warnOnce([`ignored invalid state entries: ${restored.invalidEntryIds.join(", ")}`]);
 		}
+		reconcile(ctx);
 		if (!reloadConfig) return;
 
 		const loaded = loadConfig(ctx.cwd);
@@ -42,6 +52,11 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 
 	pi.on("session_start", async (_event, ctx) => restore(ctx, true));
 	pi.on("session_tree", async (_event, ctx) => restore(ctx, false));
+	pi.on("session_compact", async (_event, ctx) => {
+		latestSnapshot = undefined;
+		nudges.reset();
+		reconcile(ctx);
+	});
 	pi.on("context", async (event, ctx) => {
 		const mapped = buildMessageMap(ctx.sessionManager.buildContextEntries(), event.messages);
 		if (!mapped.ok) {
@@ -78,6 +93,4 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 		return { messages: injectNudge(overlay.messages, evaluated.decision) };
 	});
 
-	// Retained by the extension runtime for later phases (nudges and tooling).
-	void config;
 }

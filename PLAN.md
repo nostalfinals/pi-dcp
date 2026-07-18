@@ -629,7 +629,20 @@ Exit criteria:
 
 - The model discovers and uses `compress` without a manual slash command in a long smoke-test session.
 
-### Phase 6 — Native compaction integration
+### Phase 6 — Native compaction integration ✅
+
+**Status:** Completed on 2026-07-18.
+
+Implemented:
+
+- Pure native-compaction reconciliation against Pi's canonical `buildContextEntries()` sequence.
+- Immediate cleanup on `session_compact` and repair on `session_start`/`session_tree`.
+- Conservative retirement of fully consumed, boundary-crossing, and invalid-order blocks.
+- Preservation of complete retained-tail blocks and monotonic `nextBlockNumber`.
+- Append-first complete snapshot persistence with no in-memory advance on cleanup failure.
+- Immediate ghost removal from `/dcp` inspection/decompression state.
+- Resume/reload repair for sessions interrupted between Pi compaction and DCP cleanup.
+- Repeated real DCP preparation plus Pi `SessionManager` compaction-cycle integration coverage with bounded active state.
 
 Deliverables:
 
