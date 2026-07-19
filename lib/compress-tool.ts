@@ -35,11 +35,8 @@ const parameters = Type.Object({
 	}), { minItems: 1, description: "One or more disjoint old-history ranges; all are committed atomically" }),
 });
 
-function errorResult(errors: string[]) {
-	return {
-		content: [{ type: "text" as const, text: `Compression rejected:\n- ${errors.join("\n- ")}` }],
-		details: { ok: false, errors } satisfies CompressToolDetails,
-	};
+function rejectCompression(errors: string[]): never {
+	throw new Error(`Compression rejected:\n- ${errors.join("\n- ")}`);
 }
 
 function snapshotIsCurrent(snapshot: CompressionRequestSnapshot, ctx: ExtensionContext): string | undefined {
@@ -69,9 +66,9 @@ export function createCompressTool(
 		executionMode: "sequential",
 		async execute(toolCallId, params, _signal, _onUpdate, ctx) {
 			const snapshot = getSnapshot();
-			if (!snapshot) return errorResult(["No exact DCP message snapshot is available; retry after a fresh model request"]);
+			if (!snapshot) rejectCompression(["No exact DCP message snapshot is available; retry after a fresh model request"]);
 			const staleReason = snapshotIsCurrent(snapshot, ctx);
-			if (staleReason) return errorResult([staleReason]);
+			if (staleReason) rejectCompression([staleReason]);
 
 			const invisibleErrors = (params.ranges as CompressionRangeInput[]).flatMap((range, index) => {
 				const errors: string[] = [];
@@ -79,7 +76,7 @@ export function createCompressTool(
 				if (!snapshot.visibleAliases.has(range.endId)) errors.push(`ranges[${index}].endId ${range.endId} was not visible in the request snapshot`);
 				return errors;
 			});
-			if (invisibleErrors.length > 0) return errorResult(invisibleErrors);
+			if (invisibleErrors.length > 0) rejectCompression(invisibleErrors);
 
 			const prepared = prepareCompression(
 				snapshot.map,
@@ -87,12 +84,12 @@ export function createCompressTool(
 				params.ranges as CompressionRangeInput[],
 				toolCallId,
 			);
-			if (!prepared.ok) return errorResult(prepared.errors);
+			if (!prepared.ok) rejectCompression(prepared.errors);
 
 			try {
 				state.commit(prepared.value.state);
 			} catch (error) {
-				return errorResult([`Failed to persist compression state: ${error instanceof Error ? error.message : String(error)}`]);
+				rejectCompression([`Failed to persist compression state: ${error instanceof Error ? error.message : String(error)}`]);
 			}
 
 			const blockIds = prepared.value.ranges.map((item) => item.block.id);

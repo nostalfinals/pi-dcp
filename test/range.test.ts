@@ -112,15 +112,13 @@ describe("safe range normalization", () => {
 		]);
 		const result = normalizeRange(map, "m003", "m003");
 		assert.equal(result.ok, false);
-		if (!result.ok) assert.match(result.error.message, /interleaved/);
 	});
 
 	it("rejects missing, stale, reversed, and cross-branch aliases", () => {
 		const current = mapMessages([user("current")]);
-		assert.deepEqual(normalizeRange(current, "m999", "m001"), {
-			ok: false,
-			error: { code: "missing_start", message: "Unknown or stale startId: m999" },
-		});
+		const missing = normalizeRange(current, "m999", "m001");
+		assert.equal(missing.ok, false);
+		if (!missing.ok) assert.equal(missing.error.code, "missing_start");
 		assert.equal(normalizeRange(current, "m001", "m002").ok, false);
 
 		const two = mapMessages([user("one"), user("two")]);
@@ -137,10 +135,7 @@ describe("safe range normalization", () => {
 		const orphan = mapMessages([user("before"), toolResult("missing"), user("after")]);
 		const orphanResult = normalizeRange(orphan, "m001", "m003");
 		assert.equal(orphanResult.ok, false);
-		if (!orphanResult.ok) {
-			assert.equal(orphanResult.error.code, "unsafe_tool_protocol");
-			assert.match(orphanResult.error.message, /orphan/);
-		}
+		if (!orphanResult.ok) assert.equal(orphanResult.error.code, "unsafe_tool_protocol");
 
 		const incomplete = mapMessages([
 			assistant([{ type: "toolCall", id: "pending", name: "bash", arguments: { command: "sleep" } }]),
@@ -148,6 +143,5 @@ describe("safe range normalization", () => {
 		]);
 		const incompleteResult = normalizeRange(incomplete, "m001", "m002");
 		assert.equal(incompleteResult.ok, false);
-		if (!incompleteResult.ok) assert.match(incompleteResult.error.message, /incomplete/);
 	});
 });

@@ -27,3 +27,4 @@ Initial experimental local/Git trial release.
 - Strong-reminder false positives caused by serializing provider metadata instead of using Pi context usage.
 - Compression savings no longer count JSON structure, provider accounting, or thinking signatures as prompt text; range estimates now use Pi's content-only token heuristic.
 - Successful compression output now reports removed source tokens, added summary tokens, and net reduction separately.
+- Rejected compression requests now throw tool execution errors so Pi records `isError: true` instead of displaying a successful tool result.

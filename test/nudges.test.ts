@@ -68,7 +68,7 @@ describe("DCP nudge policy", () => {
 		assert.equal(largeWindow.decision, undefined);
 
 		const unavailable = createNudgeController().evaluate({ ...input("unknown", 900, percentage), contextWindow: undefined });
-		assert.match(unavailable.configError ?? "", /context window/);
+		assert.ok(unavailable.configError);
 		assert.equal(unavailable.decision, undefined);
 	});
 

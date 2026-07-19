@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { SessionManager, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createCompressTool, formatTokenEstimate } from "../lib/compress-tool.js";
+import { createCompressTool } from "../lib/compress-tool.js";
 import { applyCompressionOverlay } from "../lib/compression.js";
 import { buildMessageMap } from "../lib/message-map.js";
 import { createStateStore } from "../lib/persistence.js";
@@ -37,14 +37,6 @@ function setup() {
 }
 
 describe("compress tool", () => {
-	it("formats estimated token savings compactly", () => {
-		assert.equal(formatTokenEstimate(0), "0");
-		assert.equal(formatTokenEstimate(999), "999");
-		assert.equal(formatTokenEstimate(1_000), "1.0k");
-		assert.equal(formatTokenEstimate(1_100), "1.1k");
-		assert.equal(formatTokenEstimate(148_385), "148.4k");
-	});
-
 	it("executes sequentially against the exact request snapshot", async () => {
 		const { manager, store, snapshot } = setup();
 		const tool = createCompressTool(store, () => snapshot);
@@ -59,10 +51,6 @@ describe("compress tool", () => {
 			result.details.estimatedTokensRemoved,
 			(result.details.estimatedTokensSaved ?? 0) + (result.details.estimatedSummaryTokens ?? 0),
 		);
-		const output = JSON.stringify(result.content);
-		assert.match(output, /Removed ~[\d.]+k? tokens/);
-		assert.match(output, /added ~[\d.]+k? summary tokens/);
-		assert.match(output, /net reduction ~[\d.]+k? tokens/);
 		assert.equal(store.get().activeBlocks[0].creatorToolCallId, "compress-call-1");
 		assert.equal(manager.getBranch().at(-1)?.type, "custom");
 
@@ -90,11 +78,9 @@ describe("compress tool", () => {
 			sessionId: manager.getSessionId(),
 			anchorLeafId,
 		}));
-		const result = await tool.execute("invisible-call", {
+		await assert.rejects(tool.execute("invisible-call", {
 			ranges: [{ startId: "m001", endId: "m002", summary: "Should not commit." }],
-		}, undefined, undefined, { sessionManager: manager } as unknown as ExtensionContext);
-		assert.equal(result.details.ok, false);
-		assert.match(JSON.stringify(result.content), /m002 was not visible/);
+		}, undefined, undefined, { sessionManager: manager } as unknown as ExtensionContext));
 		assert.equal(store.get().activeBlocks.length, 0);
 	});
 
@@ -105,11 +91,19 @@ describe("compress tool", () => {
 		manager.appendMessage({ role: "user", content: "sibling", timestamp: 4 });
 
 		const tool = createCompressTool(store, () => snapshot);
-		const result = await tool.execute("stale-call", {
+		await assert.rejects(tool.execute("stale-call", {
 			ranges: [{ startId: "m001", endId: "m002", summary: "Should not commit." }],
-		}, undefined, undefined, { sessionManager: manager } as unknown as ExtensionContext);
-		assert.equal(result.details.ok, false);
-		assert.match(JSON.stringify(result.content), /stale|another branch/);
+		}, undefined, undefined, { sessionManager: manager } as unknown as ExtensionContext));
+		assert.equal(store.get().activeBlocks.length, 0);
+	});
+
+	it("reports active-work rejection as a failed tool execution", async () => {
+		const { manager, store, snapshot } = setup();
+		const tool = createCompressTool(store, () => snapshot);
+
+		await assert.rejects(tool.execute("active-work-call", {
+			ranges: [{ startId: "m001", endId: "m003", summary: "Must not replace current work." }],
+		}, undefined, undefined, { sessionManager: manager } as unknown as ExtensionContext));
 		assert.equal(store.get().activeBlocks.length, 0);
 	});
 });

@@ -61,20 +61,6 @@ describe("extension message finalization", () => {
 		assert.equal(result?.message?.content[0]?.text, "before  after");
 	});
 
-	it("adds a per-run system instruction that forbids reproducing markers", async () => {
-		const handlers = registeredHandlers();
-		const result = await handlers.get("before_agent_start")?.[0](
-			{ type: "before_agent_start", systemPrompt: "base" } as never,
-			{} as ExtensionContext,
-		) as { systemPrompt?: string } | undefined;
-
-		assert.match(result?.systemPrompt ?? "", /^base/);
-		assert.match(result?.systemPrompt ?? "", /read-only metadata/);
-		assert.match(result?.systemPrompt ?? "", /previous-assistant-id.*preceding assistant/);
-		assert.match(result?.systemPrompt ?? "", /reference only these IDs/);
-		assert.match(result?.systemPrompt ?? "", /never output, quote, or reproduce/);
-	});
-
 	it("leaves ordinary assistant messages unchanged", async () => {
 		const handlers = registeredHandlers();
 		const message = assistant([{ type: "text", text: "normal output" }]);

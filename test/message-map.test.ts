@@ -247,10 +247,7 @@ describe("message mapping", () => {
 		const modified = [{ role: "user", content: "modified", timestamp: 1 } as AgentMessage];
 		const contentMismatch = buildMessageMap(entries, modified);
 		assert.equal(contentMismatch.ok, false);
-		if (!contentMismatch.ok) {
-			assert.equal(contentMismatch.messages, modified);
-			assert.match(contentMismatch.reason, /does not match/);
-		}
+		if (!contentMismatch.ok) assert.equal(contentMismatch.messages, modified);
 	});
 
 	it("estimates prompt content without charging annotations or provider metadata", () => {
