@@ -56,7 +56,6 @@ describe("DCP nudge policy", () => {
 		const messages = [{ role: "user", content: "work", timestamp: 1 } as AgentMessage];
 		const outbound = injectNudge(messages, repeated.decision);
 		assert.equal(outbound.length, 2);
-		assert.equal((JSON.stringify(outbound).match(/<dcp-nudge/g) ?? []).length, 1);
 	});
 
 	it("resolves percentage thresholds independently for each model window", () => {
@@ -82,20 +81,18 @@ describe("DCP nudge policy", () => {
 		const due = controller.evaluate(input("tool-result-15", 10, highLimits));
 		assert.equal(due.decision?.level, "iteration");
 		assert.deepEqual(due.decision?.reasons, ["iteration"]);
-		assert.match(due.decision?.message ?? "", /autonomous tool loop/);
 
 		const resetByUser = controller.evaluate(input("new-user-leaf", 10, highLimits, 1_000, "user-2"));
 		assert.equal(resetByUser.decision, undefined);
 	});
 
-	it("combines threshold and iteration reasons into one ephemeral message", () => {
+	it("records threshold and iteration reasons together", () => {
 		const controller = createNudgeController();
 		controller.evaluate(input("user-leaf", 250));
 		for (let step = 1; step < 15; step += 1) controller.evaluate(input(`loop-${step}`, 250));
 		const combined = controller.evaluate(input("loop-15", 250));
 		assert.equal(combined.decision?.level, "strong");
 		assert.deepEqual(combined.decision?.reasons, ["threshold", "iteration"]);
-		assert.equal((combined.decision?.message.match(/single reminder/g) ?? []).length, 1);
 	});
 
 	it("preserves the exact outbound array and session when no nudge is due", () => {

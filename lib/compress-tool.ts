@@ -32,7 +32,7 @@ const parameters = Type.Object({
 		endId: Type.String({ description: "Last DCP message alias in the closed range, for example m037" }),
 		summary: Type.String({ minLength: 1, description: "High-fidelity replacement summary for this range" }),
 		topic: Type.Optional(Type.String({ description: "Optional short topic label" })),
-	}), { minItems: 1, description: "One or more disjoint old-history ranges; all are committed atomically" }),
+	}), { minItems: 1, description: "One or more disjoint old-history ranges." }),
 });
 
 function rejectCompression(errors: string[]): never {
@@ -55,8 +55,8 @@ export function createCompressTool(
 	return {
 		name: "compress",
 		label: "Compress context",
-		description: "Replace one or more old message ranges with your supplied high-fidelity summaries. Use only visible mNNN IDs.",
-		promptSnippet: "Compress old context ranges using model-written summaries",
+		description: "Replace one or more old message ranges with your supplied high-fidelity summaries. Use only visible message IDs.",
+		promptSnippet: "Compress old context ranges using your summaries",
 		promptGuidelines: [
 			"Use compress only for completed, older work; never include the current active work segment.",
 			"Make each compression summary self-contained and preserve decisions, constraints, paths, commands, errors, and unresolved work.",

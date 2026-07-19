@@ -35,29 +35,15 @@ export const DCP_NUDGE_MESSAGE_TYPE = "pi-dcp-nudge";
 const SOFT_INTERVAL = 5;
 const ITERATION_INTERVAL = 15;
 
-function formatTokens(tokens: number): string {
-	return Math.max(0, Math.round(tokens)).toLocaleString("en-US");
-}
-
-function nudgeText(
-	level: NudgeLevel,
-	reasons: Array<"threshold" | "iteration">,
-	tokens: number,
-): string {
+function nudgeText(level: NudgeLevel): string {
 	const opening = level === "strong"
-		? `DCP strong reminder: effective conversation context is approximately ${formatTokens(tokens)} tokens. Compress substantial completed history now if a safe range exists.`
+		? "REMINDER: CONTEXT PRESSURE HAS EXCEEDED A SAFE LEVEL. COMPRESS OLDER COMPLETED WORK NOW IF A SAFE RANGE EXISTS."
 		: level === "soft"
-			? `DCP reminder: effective conversation context is approximately ${formatTokens(tokens)} tokens. Consider compressing a completed semantic phase when useful.`
-			: "DCP iteration reminder: this autonomous tool loop has continued for many model/tool steps. Compress older completed work if a safe range exists.";
-	const combined = reasons.length === 2
-		? " Both context pressure and the long-running tool loop triggered this single reminder."
-		: "";
+			? "Reminder: Context pressure has reached a notable level. Consider compressing older completed work if a safe range exists."
+			: "Reminder: Many tool calls have been made. Consider compressing older completed work if a safe range exists.";
 	return [
 		`<dcp-nudge level="${level}">`,
-		`${opening}${combined}`,
-		"Use the compress tool only on completed or stale ranges identified by visible mNNN IDs.",
-		"Preserve decisions, constraints, file paths, commands, errors, validation state, and unresolved next steps.",
-		"Never compress recent or in-flight work. Prefer one meaningful batch over many tiny ranges to reduce prompt-cache churn.",
+		opening,
 		"</dcp-nudge>",
 	].join("\n");
 }
@@ -196,7 +182,7 @@ export function createNudgeController(): NudgeController {
 				level,
 				reasons,
 				estimatedTokens: input.estimatedTokens,
-				message: nudgeText(level, reasons, input.estimatedTokens),
+				message: nudgeText(level),
 			};
 		}
 

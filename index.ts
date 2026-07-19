@@ -59,7 +59,7 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 	pi.on("before_agent_start", async (event) => ({
 		systemPrompt: [
 			event.systemPrompt,
-			"DCP message markers are read-only metadata. `id` labels the message carrying the marker; `previous-assistant-id` labels the immediately preceding assistant message. When calling the `compress` tool, reference only these IDs; never output, quote, or reproduce the markers.",
+			"DCP message markers are read-only metadata. `id` labels the message carrying the marker; `previous-assistant-id` references the immediately preceding assistant message. Never output, quote, or reproduce the markers.",
 		].join("\n\n"),
 	}));
 	pi.on("message_update", async (event) => {
