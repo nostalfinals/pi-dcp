@@ -87,17 +87,53 @@ describe("DCP context and decompress commands", () => {
 		} as Pick<ExtensionAPI, "registerCommand">, store);
 		assert.ok(command);
 		assert.ok(command.getArgumentCompletions?.("decompress"));
+		assert.ok(command.getArgumentCompletions?.("inspect b1"));
 
+		const notifications: Array<{ message: string; level: string }> = [];
 		const ctx = {
 			sessionManager: manager,
-			ui: { notify() {} },
+			ui: { notify(message: string, level: string) { notifications.push({ message, level }); } },
 		} as unknown as ExtensionCommandContext;
+		await command.handler("inspect b1", ctx);
+		const inspection = notifications.pop();
+		assert.equal(inspection?.level, "info");
+		assert.match(inspection?.message ?? "", /source summary/);
+		assert.equal(store.get().activeBlocks.length, 1, "inspection must not alter active blocks");
+
 		await command.handler("decompress", ctx);
 		assert.equal(store.get().activeBlocks.length, 1);
 
 		await command.handler("decompress b1", ctx);
 		assert.equal(store.get().activeBlocks.length, 0);
 		assert.equal(manager.getBranch().at(-1)?.type, "custom");
+	});
+
+	it("rejects inspection of unknown and native-compacted blocks", async () => {
+		const { manager, state } = setup();
+		const store = createStateStore({ appendEntry: (type, data) => { manager.appendCustomEntry(type, data); } });
+		store.replace(state);
+		let command: { handler(args: string, ctx: ExtensionCommandContext): Promise<void> } | undefined;
+		registerDcpCommand({
+			registerCommand(_name, options) {
+				command = options;
+			},
+		} as Pick<ExtensionAPI, "registerCommand">, store);
+		assert.ok(command);
+
+		const notifications: Array<{ message: string; level: string }> = [];
+		const ctx = {
+			sessionManager: manager,
+			ui: { notify(message: string, level: string) { notifications.push({ message, level }); } },
+		} as unknown as ExtensionCommandContext;
+		await command.handler("inspect b9", ctx);
+		assert.equal(notifications.pop()?.level, "warning");
+		assert.equal(store.get().activeBlocks.length, 1);
+
+		const currentId = manager.getLeafId() as string;
+		manager.appendCompaction("native summary", currentId, 100);
+		await command.handler("inspect b1", ctx);
+		assert.equal(notifications.pop()?.level, "warning");
+		assert.equal(store.get().activeBlocks.length, 1);
 	});
 
 	it("keeps decompression branch-local", () => {

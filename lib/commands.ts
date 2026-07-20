@@ -78,17 +78,29 @@ function listMessage(entries: readonly SessionEntry[], state: DcpStateSnapshot, 
 		? restorable.map((item) => `• ${blockLabel(item.block)} (${item.block.startEntryId.slice(0, 8)}…${item.block.endEntryId.slice(0, 8)})`)
 		: ["No active, restorable DCP compression blocks."];
 	if (unavailable > 0) lines.push(`${unavailable} stale block${unavailable === 1 ? " is" : "s are"} unavailable pending native-compaction cleanup.`);
-	if (includeUsage) lines.push("Use /dcp decompress <block-id> to restore a range.");
+	if (includeUsage) lines.push("Use /dcp inspect <block-id> to view a summary or /dcp decompress <block-id> to restore a range.");
 	return lines.join("\n");
+}
+
+function inspectionMessage(block: CompressionBlock): string {
+	return [
+		blockLabel(block),
+		`Range: ${block.startEntryId.slice(0, 8)}…${block.endEntryId.slice(0, 8)}`,
+		"",
+		"Summary:",
+		block.summary,
+	].join("\n");
 }
 
 export function registerDcpCommand(pi: Pick<ExtensionAPI, "registerCommand">, state: StateStore): void {
 	pi.registerCommand("dcp", {
-		description: "Inspect DCP context or decompress an active block",
+		description: "Inspect DCP context, view a summary, or decompress an active block",
 		getArgumentCompletions(prefix) {
 			const options = [
 				{ value: "context", label: "context" },
+				{ value: "inspect", label: "inspect" },
 				{ value: "decompress", label: "decompress" },
+				...state.get().activeBlocks.map((block) => ({ value: `inspect ${block.id}`, label: `inspect ${blockLabel(block)}` })),
 				...state.get().activeBlocks.map((block) => ({ value: `decompress ${block.id}`, label: `decompress ${blockLabel(block)}` })),
 			];
 			const matches = options.filter((item) => item.value.startsWith(prefix));
@@ -105,8 +117,8 @@ export function registerDcpCommand(pi: Pick<ExtensionAPI, "registerCommand">, st
 				ctx.ui.notify(listMessage(ctx.sessionManager.buildContextEntries(), state.get(), true), "info");
 				return;
 			}
-			if (operation !== "decompress") {
-				ctx.ui.notify("Usage: /dcp [context | decompress [block-id]]", "warning");
+			if (operation !== "inspect" && operation !== "decompress") {
+				ctx.ui.notify("Usage: /dcp [context | inspect [block-id] | decompress [block-id]]", "warning");
 				return;
 			}
 			if (parts.length === 1) {
@@ -114,11 +126,28 @@ export function registerDcpCommand(pi: Pick<ExtensionAPI, "registerCommand">, st
 				return;
 			}
 			if (parts.length !== 2) {
-				ctx.ui.notify("Usage: /dcp decompress [block-id]", "warning");
+				ctx.ui.notify(`Usage: /dcp ${operation} [block-id]`, "warning");
 				return;
 			}
 
-			const decompressed = prepareDecompression(ctx.sessionManager.buildContextEntries(), state.get(), parts[1]);
+			const entries = ctx.sessionManager.buildContextEntries();
+			const currentState = state.get();
+			if (operation === "inspect") {
+				const availability = inspectActiveBlocks(entries, currentState).find((candidate) => candidate.block.id === parts[1]);
+				if (!availability?.restorable) {
+					ctx.ui.notify(
+						availability
+							? `${parts[1]} can no longer be inspected because Pi native compaction has already consolidated or removed its source range`
+							: `Unknown active compression block: ${parts[1]}`,
+						"warning",
+					);
+					return;
+				}
+				ctx.ui.notify(inspectionMessage(availability.block), "info");
+				return;
+			}
+
+			const decompressed = prepareDecompression(entries, currentState, parts[1]);
 			if (!decompressed.ok) {
 				ctx.ui.notify(decompressed.message, "warning");
 				return;
