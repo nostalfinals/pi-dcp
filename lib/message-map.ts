@@ -136,6 +136,10 @@ export function estimateMessageTokens(message: AgentMessage): number {
 	return Math.max(1, estimatePiTokens(stripMessageAnnotation(message)));
 }
 
+function isNonReplayableAssistant(message: AgentMessage): boolean {
+	return message.role === "assistant" && (message.stopReason === "error" || message.stopReason === "aborted");
+}
+
 function projectedMessages(entries: readonly SessionEntry[]): Array<{
 	entry: SessionEntry;
 	entryIndex: number;
@@ -158,12 +162,18 @@ export function buildMessageMap(
 	contextEntries: readonly SessionEntry[],
 	outboundMessages: readonly AgentMessage[],
 ): MessageMapResult {
-	const projected = projectedMessages(contextEntries);
-	if (projected.length !== outboundMessages.length) {
+	// Pi persists interrupted assistant turns for display/audit, but excludes them
+	// from retry context. Provider transforms also skip restored error/aborted
+	// assistant messages because their reasoning or tool calls may be incomplete.
+	// Treat them as non-context tombstones on both sides so a retry can recover
+	// immediately without assigning the failed turn an alias or compression range.
+	const projected = projectedMessages(contextEntries).filter((item) => !isNonReplayableAssistant(item.message));
+	const replayableOutbound = outboundMessages.filter((message) => !isNonReplayableAssistant(message));
+	if (projected.length !== replayableOutbound.length) {
 		return {
 			ok: false,
 			messages: outboundMessages as AgentMessage[],
-			reason: `message count mismatch: projected ${projected.length}, outbound ${outboundMessages.length}`,
+			reason: `message count mismatch: projected ${projected.length}, outbound ${replayableOutbound.length}`,
 		};
 	}
 
@@ -180,7 +190,7 @@ export function buildMessageMap(
 	}
 
 	const strippedProjected = projected.map((item) => stripMessageAnnotation(item.message));
-	const stripped = outboundMessages.map(stripMessageAnnotation);
+	const stripped = replayableOutbound.map(stripMessageAnnotation);
 	for (let index = 0; index < projected.length; index += 1) {
 		if (!isDeepStrictEqual(strippedProjected[index], stripped[index])) {
 			return {

@@ -29,6 +29,23 @@ function userEntry(text: string): SessionEntry {
 	return entry({ type: "message", message: { role: "user", content: text, timestamp: 1 } });
 }
 
+function assistantEntry(text: string, stopReason: "stop" | "error" | "aborted" = "stop"): SessionEntry {
+	return entry({
+		type: "message",
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text }],
+			api: "test",
+			provider: "test",
+			model: "test",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+			stopReason,
+			...(stopReason === "error" ? { errorMessage: "WebSocket closed" } : {}),
+			timestamp: 1,
+		},
+	});
+}
+
 function messagesFor(entries: SessionEntry[]): AgentMessage[] {
 	return entries.flatMap(sessionEntryToContextMessages);
 }
@@ -193,6 +210,42 @@ describe("message mapping", () => {
 		assert.equal(mapped.ok, true);
 		if (!mapped.ok) return;
 		assert.deepEqual(mapped.value.mappedMessages.map((item) => item.entryId), [compactionId, keptId]);
+	});
+
+	it("hot-recovers when Pi persists a retry error but removes it from outbound context", () => {
+		entryNumber = 0;
+		const user = userEntry("retry this request");
+		const interrupted = assistantEntry("partial response", "error");
+		const entries = [user, interrupted];
+		const outbound = messagesFor([user]);
+		const mapped = buildMessageMap(entries, outbound);
+
+		assert.equal(mapped.ok, true);
+		if (!mapped.ok) return;
+		assert.deepEqual(mapped.value.mappedMessages.map((item) => item.entryId), [user.id]);
+		assert.doesNotMatch(JSON.stringify(mapped.value.messages), /partial response|WebSocket closed/);
+	});
+
+	it("keeps restored failed turns invisible and links users to the last valid assistant", () => {
+		entryNumber = 0;
+		const firstUser = userEntry("start");
+		const validAssistant = assistantEntry("valid answer");
+		const interrupted = assistantEntry("incomplete answer", "error");
+		const nextUser = userEntry("continue");
+		const entries = [firstUser, validAssistant, interrupted, nextUser];
+		const mapped = buildMessageMap(entries, messagesFor(entries));
+
+		assert.equal(mapped.ok, true);
+		if (!mapped.ok) return;
+		assert.deepEqual(mapped.value.mappedMessages.map((item) => item.entryId), [
+			firstUser.id,
+			validAssistant.id,
+			nextUser.id,
+		]);
+		assert.doesNotMatch(JSON.stringify(mapped.value.messages), /incomplete answer|WebSocket closed/);
+		assert.match(JSON.stringify(mapped.value.messages[2]), /id=\\"m003\\" previous-assistant-id=\\"m002/);
+		assert.equal(mapped.value.byEntryId.has(interrupted.id), false);
+		assert.equal(mapped.value.visibleAliases.has("m002"), true);
 	});
 
 	it("keeps existing aliases stable when message count grows past 999", () => {
