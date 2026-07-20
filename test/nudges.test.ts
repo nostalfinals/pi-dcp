@@ -19,6 +19,7 @@ function input(
 	config: DcpConfig = numericConfig,
 	contextWindow = 1_000,
 	latestUserEntryId = "user-1",
+	hasClosedHistory = true,
 ): NudgeEvaluationInput {
 	return {
 		config,
@@ -27,6 +28,7 @@ function input(
 		sessionId: "session-1",
 		requestLeafId: leaf,
 		latestUserEntryId,
+		hasClosedHistory,
 	};
 }
 
@@ -34,6 +36,21 @@ describe("DCP nudge policy", () => {
 	it("emits no threshold nudge below minimum", () => {
 		const controller = createNudgeController();
 		assert.equal(controller.evaluate(input("leaf-1", 99)).decision, undefined);
+	});
+
+	it("suppresses all reminders while the first user turn is the only active work", () => {
+		const controller = createNudgeController();
+		assert.equal(controller.evaluate(input("user-leaf", 250, numericConfig, 1_000, "user-1", false)).decision, undefined);
+		for (let step = 1; step <= 20; step += 1) {
+			assert.equal(
+				controller.evaluate(input(`tool-result-${step}`, 250, numericConfig, 1_000, "user-1", false)).decision,
+				undefined,
+			);
+		}
+
+		const nextTurn = controller.evaluate(input("second-user", 250, numericConfig, 1_000, "user-2", true));
+		assert.equal(nextTurn.decision?.level, "strong");
+		assert.deepEqual(nextTurn.decision?.reasons, ["threshold"]);
 	});
 
 	it("throttles soft reminders to the first and every fifth later eligible request", () => {

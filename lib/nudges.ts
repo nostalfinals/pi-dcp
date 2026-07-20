@@ -19,6 +19,7 @@ export interface NudgeEvaluationInput {
 	sessionId: string;
 	requestLeafId: string | null;
 	latestUserEntryId?: string;
+	hasClosedHistory: boolean;
 }
 
 export interface NudgeEvaluationResult {
@@ -138,11 +139,12 @@ export function createNudgeController(): NudgeController {
 			resolved.config?.maxCompressContext,
 			resolved.error,
 			stepsSinceUser,
+			input.hasClosedHistory,
 		]);
 		if (signature === lastDecisionSignature && lastDecision) return lastDecision;
 
 		let thresholdLevel: "soft" | "strong" | undefined;
-		if (resolved.config) {
+		if (input.hasClosedHistory && resolved.config) {
 			if (input.estimatedTokens >= resolved.config.maxCompressContext) thresholdLevel = "strong";
 			else if (input.estimatedTokens >= resolved.config.minCompressContext) thresholdLevel = "soft";
 		}
@@ -162,7 +164,7 @@ export function createNudgeController(): NudgeController {
 			softCountedRequestKey = undefined;
 		}
 
-		if (stepsSinceUser >= ITERATION_INTERVAL && stepsSinceUser - lastIterationNudgeStep >= ITERATION_INTERVAL) {
+		if (input.hasClosedHistory && stepsSinceUser >= ITERATION_INTERVAL && stepsSinceUser - lastIterationNudgeStep >= ITERATION_INTERVAL) {
 			iterationDueForRequest = true;
 			lastIterationNudgeStep = stepsSinceUser;
 		}

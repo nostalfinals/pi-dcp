@@ -6,6 +6,7 @@ import { afterEach, describe, it } from "node:test";
 import { SessionManager, type SessionEntry } from "@earendil-works/pi-coding-agent";
 import {
 	applyCompressionOverlay,
+	hasClosedHistory,
 	prepareCompression,
 	type CompressionRangeInput,
 } from "../lib/compression.js";
@@ -71,6 +72,20 @@ afterEach(() => {
 });
 
 describe("compression preparation and outbound overlay", () => {
+	it("reports closed history only after an active-work boundary has prior messages", () => {
+		sequence = 0;
+		assert.equal(hasClosedHistory(mapMessages([
+			user("first request"),
+			assistant([{ type: "toolCall", id: "read-1", name: "read", arguments: { path: "x" } }]),
+			toolResult("read-1"),
+		])), false);
+		assert.equal(hasClosedHistory(mapMessages([
+			user("first request"),
+			assistant([{ type: "text", text: "finished" }]),
+			user("second request"),
+		])), true);
+	});
+
 	it("prepares one old range and inserts its summary exactly once", () => {
 		sequence = 0;
 		const map = mapMessages([user(long("old user")), assistant([{ type: "text", text: long("old answer") }]), user("current work")]);

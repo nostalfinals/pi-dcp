@@ -3,7 +3,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { registerDcpCommand } from "./lib/commands.js";
 import { reconcileStateStore } from "./lib/compaction-sync.js";
 import { createCompressTool, type CompressionRequestSnapshot } from "./lib/compress-tool.js";
-import { applyCompressionOverlay } from "./lib/compression.js";
+import { applyCompressionOverlay, hasClosedHistory } from "./lib/compression.js";
 import { DEFAULT_CONFIG, loadConfig } from "./lib/config.js";
 import { buildMessageMap, stripMessageAnnotation } from "./lib/message-map.js";
 import { emitMarkerDebug } from "./lib/marker-debug.js";
@@ -121,6 +121,7 @@ export default function dcpExtension(pi: ExtensionAPI): void {
 			sessionId: ctx.sessionManager.getSessionId(),
 			requestLeafId: ctx.sessionManager.getLeafId(),
 			latestUserEntryId: latestUser?.entryId,
+			hasClosedHistory: hasClosedHistory(mapped.value),
 		});
 		if (evaluated.configError) warnOnce([`compression nudges disabled: ${evaluated.configError}`]);
 		const outbound = injectNudge(overlay.messages, evaluated.decision);

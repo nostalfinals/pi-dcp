@@ -158,6 +158,11 @@ function activeWorkStart(map: MessageMap): number {
 	return Math.max(0, map.mappedMessages.length - 1);
 }
 
+/** Whether at least one message exists outside the protected active-work segment. */
+export function hasClosedHistory(map: MessageMap): boolean {
+	return map.mappedMessages.length > 0 && activeWorkStart(map) > 0;
+}
+
 function overlap(leftStart: number, leftEnd: number, rightStart: number, rightEnd: number): boolean {
 	return leftStart <= rightEnd && rightStart <= leftEnd;
 }
